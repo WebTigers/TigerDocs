@@ -36,5 +36,5 @@ in your active theme.*
 ## License & support
 
 MIT © WebTigers. Issues + PRs welcome at
-[github.com/WebTigers/tiger-docs](https://github.com/WebTigers/tiger-docs).
+[github.com/WebTigers/TigerDocs](https://github.com/WebTigers/TigerDocs).
 This module is **free** — no pro tier.

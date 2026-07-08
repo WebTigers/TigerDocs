@@ -13,13 +13,13 @@ organized, searchable help site rendered in your app's active theme.
 *Install from URL* and paste this repo's URL:
 
 ```
-https://github.com/WebTigers/tiger-docs
+https://github.com/WebTigers/TigerDocs
 ```
 
 **From the CLI:**
 
 ```
-vendor/bin/tiger module:install https://github.com/WebTigers/tiger-docs
+vendor/bin/tiger module:install https://github.com/WebTigers/TigerDocs
 vendor/bin/tiger module:activate docs
 ```
 

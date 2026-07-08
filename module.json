@@ -5,8 +5,8 @@
   "version": "0.1.0",
   "description": "A public documentation site for your Tiger app — organized, searchable help pages rendered in your active theme.",
   "author": { "name": "WebTigers", "url": "https://webtigers.com" },
-  "homepage": "https://github.com/WebTigers/tiger-docs",
-  "repository": "https://github.com/WebTigers/tiger-docs",
+  "homepage": "https://github.com/WebTigers/TigerDocs",
+  "repository": "https://github.com/WebTigers/TigerDocs",
   "license": "MIT",
   "keywords": ["docs", "documentation", "help", "knowledge-base"],
 
