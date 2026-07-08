@@ -1,0 +1,26 @@
+{
+  "schema": "tiger.module/v1",
+  "slug": "docs",
+  "name": "Documentation",
+  "version": "0.1.0",
+  "description": "A public documentation site for your Tiger app — organized, searchable help pages rendered in your active theme.",
+  "author": { "name": "WebTigers", "url": "https://webtigers.com" },
+  "homepage": "https://github.com/WebTigers/tiger-docs",
+  "repository": "https://github.com/WebTigers/tiger-docs",
+  "license": "MIT",
+  "keywords": ["docs", "documentation", "help", "knowledge-base"],
+
+  "requires": { "tiger": ">=1.0", "php": ">=8.1" },
+
+  "namespace": "Docs",
+  "provides": {
+    "routes":     ["/docs"],
+    "acl":        "configs/acl.ini",
+    "migrations": "migrations",
+    "assets":     "assets"
+  },
+
+  "pricing": { "model": "free", "pro_url": null },
+
+  "_notes": "The repository ROOT is the module: on install its contents land in application/modules/<slug>/. Tiger reads this manifest to install/verify; the Vendor Registry entry is this manifest + the vetted release ref."
+}
