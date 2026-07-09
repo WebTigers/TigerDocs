@@ -65,13 +65,15 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
         <aside class="col-lg-2 d-none d-lg-block">
             <div class="sticky-top pt-2" style="top:4.5rem;">
                 <div class="small text-uppercase text-body-secondary mb-2 fw-semibold" style="letter-spacing:.06em;"><?= $this->translate('docs.onthispage') ?></div>
-                <nav class="nav flex-column border-start ps-3">
+                <nav class="docs-toc nav flex-column border-start ps-3 position-relative" id="docsToc">
+                    <span class="docs-toc-marker" aria-hidden="true"></span>
                     <?php foreach ($headings as $h): ?>
-                    <a class="nav-link py-1 px-0 small text-body-secondary<?= (int) $h['level'] === 3 ? ' ps-3' : '' ?>" href="#<?= $this->escape($h['id']) ?>"><?= $this->escape($h['text']) ?></a>
+                    <a class="nav-link py-1 px-0 small text-body-secondary<?= (int) $h['level'] === 3 ? ' ps-3' : '' ?>" data-toc-link href="#<?= $this->escape($h['id']) ?>"><?= $this->escape($h['text']) ?></a>
                     <?php endforeach; ?>
                 </nav>
             </div>
         </aside>
+        <script src="/_modules/docs/docs.toc.js" defer></script>
         <?php endif; ?>
     </div>
 </div>

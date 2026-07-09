@@ -39,3 +39,25 @@
     background: var(--bs-secondary-bg);
     border-color: var(--bs-secondary-color) !important;
 }
+
+/* "On this page" scrollspy: a marker that slides along the TOC's left rail to the active heading. */
+.docs-toc-marker {
+    position: absolute;
+    left: -1px;                 /* straddle the nav's 1px border-start (the rail) */
+    top: 0;
+    width: 2px;
+    height: 0;
+    opacity: 0;                 /* revealed once JS positions it */
+    background: var(--bs-primary);
+    border-radius: 2px;
+    transition: transform .25s ease, height .25s ease, opacity .2s ease;
+}
+.docs-toc .nav-link {
+    transition: color .15s ease;
+}
+.docs-toc .nav-link.active {
+    color: var(--bs-primary) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    .docs-toc-marker { transition: opacity .2s ease; }
+}
