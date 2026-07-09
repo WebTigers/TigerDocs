@@ -19,9 +19,9 @@ $base = (string) ($this->docsBase ?: '/docs');
 
         <main class="col-lg-9 col-md-8">
             <header class="mb-4">
-                <div class="small text-uppercase text-body-secondary mb-1" style="letter-spacing:.09em;font-weight:600;">Documentation</div>
-                <h1 class="display-6 fw-bold mb-2">Tiger Docs</h1>
-                <p class="lead text-body-secondary mb-0">Guides and reference for your Tiger app — rendered in your active theme, served from shipped files or your own database content.</p>
+                <div class="small text-uppercase text-body-secondary mb-1" style="letter-spacing:.09em;font-weight:600;"><?= $this->translate('docs.landing.eyebrow') ?></div>
+                <h1 class="display-6 fw-bold mb-2"><?= $this->translate('docs.landing.heading') ?></h1>
+                <p class="lead text-body-secondary mb-0"><?= $this->translate('docs.landing.lead') ?></p>
             </header>
 
             <?php if (!$tree): ?>

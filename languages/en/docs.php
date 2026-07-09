@@ -7,8 +7,13 @@
  * content/<locale>/ files (or DB doc rows); these are the chrome + API-message strings only.
  */
 return [
-    'docs.title'         => 'Documentation',
-    'docs.home'          => 'Docs',
-    'docs.notfound'      => 'That document could not be found.',
+    'docs.title'          => 'Documentation',
+    'docs.home'           => 'Docs',
+    'docs.notfound'       => 'That document could not be found.',
     'docs.settings.saved' => 'Docs settings saved.',
+
+    // Landing chrome (localized so the docs home follows the language switch).
+    'docs.landing.eyebrow' => 'Documentation',
+    'docs.landing.heading' => 'Tiger Docs',
+    'docs.landing.lead'    => 'Guides and reference for your Tiger app.',
 ];

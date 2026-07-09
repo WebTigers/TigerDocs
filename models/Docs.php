@@ -96,12 +96,22 @@ class Docs_Model_Docs
      */
     public function tree($locale = 'en')
     {
-        $path = $this->_contentDir . '/manifest.json';
-        if (!is_file($path)) {
-            return [];
+        $locale = preg_match('/^[a-z]{2}$/', (string) $locale) ? (string) $locale : 'en';
+        // Per-locale nav (translated labels) wins; fall back to English, then a legacy single
+        // manifest at the content root. First one that parses with sections is used.
+        foreach ([
+            $this->_contentDir . '/' . $locale . '/manifest.json',
+            $this->_contentDir . '/en/manifest.json',
+            $this->_contentDir . '/manifest.json',
+        ] as $path) {
+            if (is_file($path)) {
+                $data = json_decode((string) file_get_contents($path), true);
+                if (is_array($data) && !empty($data['sections'])) {
+                    return $data['sections'];
+                }
+            }
         }
-        $data = json_decode((string) file_get_contents($path), true);
-        return (is_array($data) && !empty($data['sections'])) ? $data['sections'] : [];
+        return [];
     }
 
     /** Resolve a DB doc row, tolerating a missing page table (fresh install → files only). */
