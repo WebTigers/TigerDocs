@@ -26,6 +26,7 @@ $prev = ($idx !== null && $idx > 0)                 ? $flat[$idx - 1] : null;
 $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
 ?>
 <?= $this->render('_partials/search.phtml') ?>
+<link rel="stylesheet" href="/_modules/docs/vendor/highlight/docs.hljs.css">
 <div class="container py-4" style="max-width:1320px;">
     <div class="row g-4">
         <aside class="col-lg-3 col-md-4">
@@ -77,3 +78,9 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
         <?php endif; ?>
     </div>
 </div>
+
+<!-- Syntax highlighting: highlight.js core (with php/css/js/xml/ini/bash/json) + php-template for
+     PHTML, then our init. All deferred, so they run in order after parse. -->
+<script src="/_modules/docs/vendor/highlight/highlight.min.js" defer></script>
+<script src="/_modules/docs/vendor/highlight/php-template.min.js" defer></script>
+<script src="/_modules/docs/docs.highlight.js" defer></script>

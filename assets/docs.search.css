@@ -61,3 +61,9 @@
 @media (prefers-reduced-motion: reduce) {
     .docs-toc-marker { transition: opacity .2s ease; }
 }
+
+/* Highlighted code blocks: give the hljs code a card border + radius (hljs owns the padding/bg). */
+.tiger-docs-body pre code.hljs {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+}
