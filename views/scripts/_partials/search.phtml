@@ -30,7 +30,7 @@ $this->placeholder('tigerHeaderSearch')->set(
 // it; filling it empty is how a page says "no auth chrome here" (the region contract, no theme edit).
 $this->placeholder('tigerHeaderAuth')->set('');
 ?>
-<link rel="stylesheet" href="<?= $this->escape($assets) ?>/docs.search.css">
+<link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/docs.search.css')) ?>">
 
 <!-- 2) The ⌘K search modal (hidden until opened). -->
 <div class="modal fade" id="docsSearchModal" tabindex="-1" aria-hidden="true"
@@ -57,4 +57,4 @@ $this->placeholder('tigerHeaderAuth')->set('');
 </div>
 
 <!-- 3) Launcher JS — defer so it runs after the theme's bootstrap.bundle.js (needed for the modal). -->
-<script src="<?= $this->escape($assets) ?>/docs.search.js" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/docs.search.js')) ?>" defer></script>
