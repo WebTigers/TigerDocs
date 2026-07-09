@@ -64,29 +64,66 @@ class Docs_Model_Docs
         // 1) DB doc — org-scoped row wins over global; published only.
         $page = $this->_dbDoc($slug, $locale, $orgId);
         if ($page) {
+            $html     = (new Tiger_Cms_Renderer())->render($page);
+            $headings = $this->_pageNav($html);   // inject heading ids + build the "on this page" outline
             return [
-                'slug'   => $slug,
-                'title'  => (string) $page->title,
-                'html'   => (new Tiger_Cms_Renderer())->render($page),
-                'format' => (string) $page->format,
-                'source' => 'db',
+                'slug'     => $slug,
+                'title'    => (string) $page->title,
+                'html'     => $html,
+                'headings' => $headings,
+                'format'   => (string) $page->format,
+                'source'   => 'db',
             ];
         }
 
         // 2) Static file shipped with the module.
         $file = $this->_file($slug, $locale);
         if ($file) {
-            $body = (string) file_get_contents($file['path']);
+            $body     = (string) file_get_contents($file['path']);
+            $html     = (new Tiger_Cms_Renderer())->renderBody($body, $file['format']);
+            $headings = $this->_pageNav($html);
             return [
-                'slug'   => $slug,
-                'title'  => $this->_fileTitle($body, $file['format'], $slug),
-                'html'   => (new Tiger_Cms_Renderer())->renderBody($body, $file['format']),
-                'format' => $file['format'],
-                'source' => 'file',
+                'slug'     => $slug,
+                'title'    => $this->_fileTitle($body, $file['format'], $slug),
+                'html'     => $html,
+                'headings' => $headings,
+                'format'   => $file['format'],
+                'source'   => 'file',
             ];
         }
 
         return null;
+    }
+
+    /**
+     * Give the body's headings (h2/h3) stable ids and return the "on this page" outline:
+     *   [ ['level' => 2|3, 'text' => '…', 'id' => '…'], … ]
+     * Ids are slugified from the heading text + deduped, so the right-rail links anchor cleanly.
+     * $html is modified in place (ids injected); an existing id on a heading is preserved.
+     */
+    protected function _pageNav(&$html)
+    {
+        $out  = [];
+        $used = [];
+        $html = preg_replace_callback('/<h([23])(\s[^>]*)?>(.*?)<\/h\1>/is', function ($m) use (&$out, &$used) {
+            $level = (int) $m[1];
+            $attrs = isset($m[2]) ? $m[2] : '';
+            $text  = trim(html_entity_decode(strip_tags($m[3]), ENT_QUOTES, 'UTF-8'));
+            if ($text === '') {
+                return $m[0];
+            }
+            $id = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($text)), '-') ?: 'section';
+            $base = $id; $i = 2;
+            while (isset($used[$id])) { $id = $base . '-' . $i++; }
+            $used[$id] = true;
+            $out[] = ['level' => $level, 'text' => $text, 'id' => $id];
+
+            if (stripos($attrs, 'id=') === false) {
+                $attrs = ' id="' . $id . '"' . $attrs;   // keep any existing attrs; add id
+            }
+            return '<h' . $level . $attrs . '>' . $m[3] . '</h' . $level . '>';
+        }, $html);
+        return $out;
     }
 
     /**

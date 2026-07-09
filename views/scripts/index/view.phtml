@@ -6,9 +6,11 @@
  * Tiger_Cms_Renderer (markdown/html/phtml) in Docs_Model_Docs — output it verbatim.
  * Renders inside the theme's public layout. Expects $this->doc, $this->tree, $this->docSlug.
  */
-$doc = $this->doc;
+$doc      = $this->doc;
+$headings = $doc['headings'] ?? [];
+$mainCol  = $headings ? 'col-lg-6' : 'col-lg-9';   // give the article room only when there's a right rail
 ?>
-<div class="container py-4" style="max-width:1160px;">
+<div class="container py-4" style="max-width:1240px;">
     <div class="row g-4">
         <aside class="col-lg-3 col-md-4">
             <div class="sticky-top pt-2" style="top:1rem;">
@@ -16,10 +18,23 @@ $doc = $this->doc;
             </div>
         </aside>
 
-        <main class="col-lg-9 col-md-8">
+        <main class="<?= $mainCol ?> col-md-8">
             <article class="tiger-docs-body">
                 <?= $doc['html'] ?>
             </article>
         </main>
+
+        <?php if ($headings): ?>
+        <aside class="col-lg-3 d-none d-lg-block">
+            <div class="sticky-top pt-2" style="top:1rem;">
+                <div class="small text-uppercase text-body-secondary mb-2 fw-semibold" style="letter-spacing:.06em;"><?= $this->translate('docs.onthispage') ?></div>
+                <nav class="nav flex-column border-start ps-3">
+                    <?php foreach ($headings as $h): ?>
+                    <a class="nav-link py-1 px-0 small text-body-secondary<?= (int) $h['level'] === 3 ? ' ps-3' : '' ?>" href="#<?= $this->escape($h['id']) ?>"><?= $this->escape($h['text']) ?></a>
+                    <?php endforeach; ?>
+                </nav>
+            </div>
+        </aside>
+        <?php endif; ?>
     </div>
 </div>

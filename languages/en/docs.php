@@ -16,4 +16,6 @@ return [
     'docs.landing.eyebrow' => 'Documentation',
     'docs.landing.heading' => 'Tiger Docs',
     'docs.landing.lead'    => 'Guides and reference for your Tiger app.',
+
+    'docs.onthispage'      => 'On this page',
 ];
