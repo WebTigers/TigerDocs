@@ -1,0 +1,108 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * Docs Settings — the public route override. ViewHelper-only form (the view owns markup).
+ * Saving is an /api call to Docs_Service_Settings; the JSON response drives the feedback.
+ * The docs are ALWAYS reachable at the canonical /docs/index/docs; this only controls the
+ * pretty alias. See ROUTING.md.
+ */
+$form = $this->form;
+$el = function ($name) use ($form) { return $form->getElement($name); };
+$enabled = !empty($el('route_enabled')->getValue());
+$pattern = (string) $el('route_pattern')->getValue() ?: 'docs';
+?>
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-1">Docs</h1>
+        <p class="text-body-secondary mb-0">Where your documentation site lives.</p>
+    </div>
+    <div class="text-nowrap">
+        <button type="button" id="docs-settings-save" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+    </div>
+</div>
+
+<div id="docs-settings-feedback"></div>
+
+<form id="docs-settings-form" onsubmit="return false;" novalidate>
+    <?= $el('_csrf') ?>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-signs-post me-2"></i>Public route</div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="docs-route-enabled" name="route_enabled" value="1" <?= $enabled ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-semibold" for="docs-route-enabled">Enable the pretty URL</label>
+                        <div class="form-text">When on, your docs answer at a short path like <code>/docs</code>. When off, they're still reachable at the canonical <code>/docs/index/docs</code> — nothing breaks, the alias just goes away.</div>
+                    </div>
+
+                    <fieldset id="docs-route-opts" class="ps-1 <?= $enabled ? '' : 'opacity-50' ?>">
+                        <div class="mb-3">
+                            <label class="form-label" for="docs-route-pattern">Public path</label>
+                            <div class="input-group" style="max-width:26rem;">
+                                <span class="input-group-text">/</span>
+                                <?= $el('route_pattern') ?>
+                            </div>
+                            <div class="form-text mt-1">Your docs will live at <code id="docs-url-preview">/docs</code> → <span class="text-body-secondary">docs/index/docs</span>. A nested path becomes the doc slug (e.g. <code>/docs/guides/deploy</code>).</div>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="docs-route-priority">Priority <span class="text-body-secondary fw-normal">(advanced)</span></label>
+                            <input class="form-control" type="text" inputmode="numeric" id="docs-route-priority" name="route_priority" value="<?= $this->escape((string) $el('route_priority')->getValue()) ?>" style="max-width:8rem;">
+                            <div class="form-text">Higher wins when two modules' pretty paths overlap. Leave at 100 unless you're deliberately reordering.</div>
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('docs-settings-form');
+    var fb   = document.getElementById('docs-settings-feedback');
+
+    document.getElementById('docs-settings-save').addEventListener('click', function () {
+        var btn = this;
+        fb.innerHTML = '';
+        form.querySelectorAll('.is-invalid').forEach(function (e) { e.classList.remove('is-invalid'); });
+        var fd = new URLSearchParams(new FormData(form));
+        fd.set('module', 'docs'); fd.set('service', 'settings'); fd.set('method', 'save');
+        TigerButton.run(btn, function () {
+            return fetch('/api', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd })
+                .then(function (r) { return r.json().catch(function () { return {}; }); });
+        })
+            .then(function (res) {
+                if (res && res.result === 1) { TigerDOM.notify(fb, 'Settings saved.', { type: 'success' }); return; }
+                if (res && res.form) {
+                    Object.keys(res.form).forEach(function (field) {
+                        var input = form.querySelector('[name="' + field + '"]');
+                        if (input) { input.classList.add('is-invalid'); }
+                    });
+                }
+                var msgs = (res && res.messages) || [];
+                if (msgs.length) { fb.innerHTML = ''; msgs.forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class, replace: false }); }); }
+                else { TigerDOM.notify(fb, 'Please fix the highlighted fields.', { type: 'error' }); }
+            })
+            .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
+    });
+
+    // Live URL preview + dim options when the alias is off.
+    var pat = document.getElementById('docs-route-pattern');
+    var prev = document.getElementById('docs-url-preview');
+    if (pat && prev) {
+        var upd = function () {
+            var p = (pat.value || 'docs').replace(/^\/+|\/+$/g, '');
+            prev.textContent = '/' + (p || 'docs');
+        };
+        pat.addEventListener('input', upd); upd();
+    }
+    var tog = document.getElementById('docs-route-enabled');
+    var opts = document.getElementById('docs-route-opts');
+    if (tog && opts) {
+        var sync = function () { opts.classList.toggle('opacity-50', !tog.checked); };
+        tog.addEventListener('change', sync); sync();
+    }
+});
+</script>

@@ -7,7 +7,7 @@
  * A first-party, INSTALLABLE Tiger module (the first canary for the Module Installer): it
  * ships in its own public repo (WebTigers/TigerDocs) and installs into
  * application/modules/docs/. Purely additive — auto-discovered by ZF1's module scan, it
- * registers a public /docs surface without touching any core file.
+ * registers a public docs surface without touching any core file.
  *
  * Extending Zend_Application_Module_Bootstrap gives the module its resource autoloader, so
  * Docs_Model_* (models/) + Docs_Service_* (services/) load by convention; controllers load
@@ -16,22 +16,32 @@
 class Docs_Bootstrap extends Zend_Application_Module_Bootstrap
 {
     /**
-     * Register the nested-slug route: /docs/<slug> (slug may contain slashes, e.g.
-     * guides/install) -> Docs_IndexController::viewAction with a `slug` param.
-     *
-     * A plain /docs (no slug) is left to the default module route (module=docs ->
-     * index/index = the landing). The regex needs ≥1 char after "docs/", so it can't
-     * swallow the bare /docs. Added here (after the router resource is up) so it's
-     * matched before the generic :module/:controller/:action route.
+     * Declare the pretty public route: `/docs` -> the canonical `docs/index/docs`, with any
+     * remaining path handed in as `slug` (so /docs/guides/deploy works). This is a DECLARATION,
+     * not a route add — Tiger_Controller_Plugin_RouteOverride applies it, only for URLs no real
+     * controller handles (so /docs/admin/settings is never shadowed). The admin can retarget,
+     * disable, or reprioritize it via the config tier (tiger.routing.override.docs.*) from the
+     * settings screen. See ROUTING.md.
      */
-    protected function _initDocsRoutes()
+    protected function _initRouteOverride()
     {
-        $router = Zend_Controller_Front::getInstance()->getRouter();
-        $router->addRoute('docs_view', new Zend_Controller_Router_Route_Regex(
-            'docs/(.+)',
-            ['module' => 'docs', 'controller' => 'index', 'action' => 'view'],
-            [1 => 'slug'],
-            'docs/%s'
-        ));
+        Tiger_Routing_Overrides::register('docs', [
+            'pattern'  => 'docs',
+            'target'   => 'docs/index/docs',
+            'priority' => 100,
+        ]);
+    }
+
+    /** Contribute the Docs page to the admin Settings tree (ACL-gated in the menu). */
+    protected function _initAdminSettings()
+    {
+        Tiger_Admin_Settings::register([
+            'key'      => 'docs',
+            'label'    => 'Docs',
+            'icon'     => 'fa-book',
+            'href'     => '/docs/admin/settings',
+            'resource' => 'Docs_AdminController',
+            'order'    => 60,
+        ]);
     }
 }
