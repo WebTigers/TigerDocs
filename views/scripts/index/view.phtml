@@ -10,6 +10,7 @@ $doc      = $this->doc;
 $headings = $doc['headings'] ?? [];
 $mainCol  = $headings ? 'col-lg-7' : 'col-lg-9';   // give the article room only when there's a right rail
 ?>
+<?= $this->render('_partials/search.phtml') ?>
 <div class="container py-4" style="max-width:1320px;">
     <div class="row g-4">
         <aside class="col-lg-3 col-md-4">

@@ -18,4 +18,9 @@ return [
 
     'docs.onthispage'      => 'En esta página',
     'docs.filter'          => 'Filtrar páginas…',
+
+    // Buscador ⌘K.
+    'docs.search.placeholder' => 'Buscar en la documentación…',
+    'docs.search.hint'        => 'Escribe para buscar en la documentación.',
+    'docs.search.empty'       => 'Sin resultados. Prueba con otras palabras.',
 ];

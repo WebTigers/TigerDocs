@@ -19,4 +19,9 @@ return [
 
     'docs.onthispage'      => 'On this page',
     'docs.filter'          => 'Filter pages…',
+
+    // ⌘K search launcher.
+    'docs.search.placeholder' => 'Search docs…',
+    'docs.search.hint'        => 'Type to search the documentation.',
+    'docs.search.empty'       => 'No results. Try different words.',
 ];

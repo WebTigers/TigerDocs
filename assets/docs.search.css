@@ -1,0 +1,25 @@
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+ * TigerDocs ⌘K search — result list states + match highlighting. Themed via Bootstrap CSS
+ * variables so it follows the active skin + light/dark automatically. */
+.docs-search-item {
+    color: inherit;
+    cursor: pointer;
+}
+.docs-search-item:hover,
+.docs-search-item.active {
+    background: var(--bs-secondary-bg);
+}
+#docsSearchModal mark {
+    padding: 0;
+    background: var(--bs-warning-bg-subtle);
+    color: inherit;
+    border-radius: .15rem;
+}
+#docsSearchModal .modal-header kbd,
+.tiger-header-search kbd {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    font-size: .7rem;
+}

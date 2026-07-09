@@ -151,6 +151,128 @@ class Docs_Model_Docs
         return [];
     }
 
+    /**
+     * Search the shipped doc files for a query, in the caller's locale (en fallback per file).
+     * Returns ranked hits: [ ['slug','title','section','snippet','score'], … ], best first.
+     *
+     * Scope note: this searches the file-backed docs listed in the manifest tree — the platform's
+     * own docs, and any app that ships doc files. DB-backed (org-authored) docs aren't indexed here
+     * yet; when that's wanted, add a second pass over Tiger_Model_Page rows of type=doc and merge.
+     *
+     * Matching is phrase-first (the whole query as a substring) then all-words (AND); title hits
+     * outrank body hits. Deliberately dependency-free (no search engine) — the doc set is small.
+     */
+    public function search($q, $locale = 'en', $limit = 8)
+    {
+        $q = trim(preg_replace('/\s+/', ' ', (string) $q));
+        if (mb_strlen($q) < 2) {
+            return [];
+        }
+        $locale = preg_match('/^[a-z]{2}$/', (string) $locale) ? (string) $locale : 'en';
+        $full   = mb_strtolower($q);
+        $words  = array_values(array_filter(explode(' ', $full), static fn($w) => $w !== ''));
+
+        $hits = [];
+        foreach ($this->tree($locale) as $section) {
+            foreach (($section['items'] ?? []) as $item) {
+                $slug = (string) ($item['slug'] ?? '');
+                if ($slug === '') {
+                    continue;
+                }
+                $file = $this->_file($slug, $locale);
+                if (!$file) {
+                    continue;
+                }
+                $title = (string) ($item['title'] ?? $slug);
+                $text  = $this->_plain((string) file_get_contents($file['path']), $file['format']);
+                $hay   = mb_strtolower($title . "\n" . $text);
+
+                $score = 0;
+                if (mb_strpos($hay, $full) !== false) {
+                    $score += 50;                                   // whole-phrase hit
+                } elseif (!$this->_allWords($hay, $words)) {
+                    continue;                                       // require every word otherwise
+                }
+                if (mb_strpos(mb_strtolower($title), $full) !== false) {
+                    $score += 100;                                  // a title match beats any body match
+                }
+                foreach ($words as $w) {
+                    $score += min(substr_count($hay, $w), 5);       // a little frequency weight
+                }
+
+                $hits[] = [
+                    'slug'    => $slug,
+                    'title'   => $title,
+                    'section' => (string) ($section['title'] ?? ''),
+                    'snippet' => $this->_snippet($text, $words, $full),
+                    'score'   => $score,
+                ];
+            }
+        }
+        usort($hits, static fn($a, $b) => $b['score'] <=> $a['score']);
+        return array_slice($hits, 0, max(1, (int) $limit));
+    }
+
+    /** True only when every word appears somewhere in the haystack (AND match). */
+    protected function _allWords($hay, array $words)
+    {
+        if (!$words) {
+            return false;
+        }
+        foreach ($words as $w) {
+            if (mb_strpos($hay, $w) === false) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A ~160-char excerpt centered on the first phrase/word hit, ellipsized at the cut ends. */
+    protected function _snippet($text, array $words, $full)
+    {
+        $text = trim(preg_replace('/\s+/', ' ', (string) $text));
+        $low  = mb_strtolower($text);
+        $pos  = mb_strpos($low, $full);
+        if ($pos === false) {
+            $pos = null;
+            foreach ($words as $w) {
+                $p = mb_strpos($low, $w);
+                if ($p !== false && ($pos === null || $p < $pos)) {
+                    $pos = $p;
+                }
+            }
+            $pos = $pos ?? 0;
+        }
+        $start = max(0, $pos - 60);
+        $snip  = mb_substr($text, $start, 160);
+        if ($start > 0) {
+            $snip = '…' . ltrim($snip);
+        }
+        if ($start + 160 < mb_strlen($text)) {
+            $snip = rtrim($snip) . '…';
+        }
+        return $snip;
+    }
+
+    /** Strip markup (markdown syntax + any HTML) down to plain, searchable text. */
+    protected function _plain($body, $format)
+    {
+        $s = (string) $body;
+        if ($format === Tiger_Model_Page::FORMAT_MARKDOWN) {
+            $s = preg_replace('/```.*?```/s', ' ', $s);              // fenced code blocks
+            $s = preg_replace('/`[^`]*`/', ' ', $s);                // inline code
+            $s = preg_replace('/!\[[^\]]*\]\([^)]*\)/', ' ', $s);   // images
+            $s = preg_replace('/\[([^\]]*)\]\([^)]*\)/', '$1', $s); // links → link text
+            $s = preg_replace('/^\s{0,3}#{1,6}\s*/m', '', $s);      // ATX headings
+            $s = preg_replace('/^\s{0,3}>\s?/m', '', $s);           // blockquotes
+            $s = preg_replace('/^\s*[-*+]\s+/m', '', $s);           // list bullets
+            $s = preg_replace('/[*_~]+/', '', $s);                  // emphasis marks
+        }
+        $s = strip_tags($s);                                        // html/phtml, or inline HTML in md
+        $s = html_entity_decode($s, ENT_QUOTES, 'UTF-8');
+        return trim(preg_replace('/\s+/', ' ', $s));
+    }
+
     /** Resolve a DB doc row, tolerating a missing page table (fresh install → files only). */
     protected function _dbDoc($slug, $locale, $orgId)
     {

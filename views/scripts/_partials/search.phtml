@@ -1,0 +1,54 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * Docs ⌘K search. Rendered from the docs views (so it runs during the action, before the
+ * layout), it does three things:
+ *   1. Fills the theme's `tigerHeaderSearch` region with the search launcher button — the
+ *      placeholder registry is shared view→layout, so the button appears in the header.
+ *   2. Emits the (hidden) search modal — a Bootstrap modal opened by ⌘K / "/" / the launcher.
+ *   3. Loads the module's published launcher JS + CSS from /_modules/docs (asset symlink).
+ * The result links are built client-side from data-docs-base, matching the sidebar's links.
+ */
+$base    = (string) ($this->docsBase ?: '/docs');
+$assets  = '/_modules/docs';
+$ph      = (string) $this->escape($this->translate('docs.search.placeholder'));
+
+// 1) Header region: the launcher button (centered search slot in the PUMA header).
+$this->placeholder('tigerHeaderSearch')->set(
+    '<button type="button" data-docs-search-open'
+  . ' class="btn btn-sm d-inline-flex align-items-center gap-2 text-body-secondary border rounded-pill px-3 py-1" style="min-width:15rem;">'
+  . '<i class="fa-solid fa-magnifying-glass"></i>'
+  . '<span class="me-auto">' . $ph . '</span>'
+  . '<kbd class="ms-2">⌘K</kbd>'
+  . '</button>'
+);
+?>
+<link rel="stylesheet" href="<?= $this->escape($assets) ?>/docs.search.css">
+
+<!-- 2) The ⌘K search modal (hidden until opened). -->
+<div class="modal fade" id="docsSearchModal" tabindex="-1" aria-hidden="true"
+     aria-label="<?= $ph ?>" data-docs-base="<?= $this->escape($base) ?>">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <i class="fa-solid fa-magnifying-glass text-body-secondary me-2"></i>
+                <input type="search" class="form-control border-0 shadow-none" data-docs-search-input
+                       autocomplete="off" placeholder="<?= $ph ?>" aria-label="<?= $ph ?>">
+                <kbd class="ms-2">Esc</kbd>
+            </div>
+            <div class="modal-body py-2">
+                <div data-docs-search-results></div>
+                <div class="text-body-secondary small text-center py-4" data-docs-search-hint>
+                    <?= $this->escape($this->translate('docs.search.hint')) ?>
+                </div>
+                <div class="text-body-secondary small text-center py-4 d-none" data-docs-search-empty>
+                    <?= $this->escape($this->translate('docs.search.empty')) ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 3) Launcher JS — defer so it runs after the theme's bootstrap.bundle.js (needed for the modal). -->
+<script src="<?= $this->escape($assets) ?>/docs.search.js" defer></script>
