@@ -1,0 +1,25 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * A single doc: sticky sidebar + the rendered doc body. The body HTML was produced by
+ * Tiger_Cms_Renderer (markdown/html/phtml) in Docs_Model_Docs — output it verbatim.
+ * Renders inside the theme's public layout. Expects $this->doc, $this->tree, $this->docSlug.
+ */
+$doc = $this->doc;
+?>
+<div class="container py-4" style="max-width:1160px;">
+    <div class="row g-4">
+        <aside class="col-lg-3 col-md-4">
+            <div class="sticky-top pt-2" style="top:1rem;">
+                <?= $this->partial('_partials/nav.phtml', ['tree' => $this->tree, 'docSlug' => $this->docSlug]) ?>
+            </div>
+        </aside>
+
+        <main class="col-lg-9 col-md-8">
+            <article class="tiger-docs-body">
+                <?= $doc['html'] ?>
+            </article>
+        </main>
+    </div>
+</div>

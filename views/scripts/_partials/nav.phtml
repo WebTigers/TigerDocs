@@ -1,0 +1,25 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * Docs sidebar — the "Documentation" home link + the section/link tree. Shared by the
+ * landing (index) and each doc (view); the current doc's link gets the active state.
+ * Expects: $this->tree (sections), $this->docSlug (active slug, '' on the landing).
+ */
+$tree   = $this->tree ?: [];
+$active = (string) ($this->docSlug ?? '');
+?>
+<a href="/docs" class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-3">
+    <i class="fa-solid fa-book me-2"></i>Documentation
+</a>
+<nav class="nav flex-column">
+    <?php foreach ($tree as $section): ?>
+    <div class="text-uppercase small fw-semibold text-body-secondary mt-3 mb-1" style="letter-spacing:.06em;">
+        <?= $this->escape($section['title']) ?>
+    </div>
+        <?php foreach ($section['items'] as $item): $on = $active === $item['slug']; ?>
+    <a class="nav-link py-1 px-2 rounded <?= $on ? 'active bg-primary-subtle text-primary-emphasis fw-semibold' : 'text-body-secondary' ?>"
+       href="/docs/<?= $this->escape($item['slug']) ?>"><?= $this->escape($item['title']) ?></a>
+        <?php endforeach; ?>
+    <?php endforeach; ?>
+</nav>

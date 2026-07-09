@@ -1,0 +1,18 @@
+{
+  "_comment": "The docs navigation tree. Each item's slug maps to content/<locale>/<slug>.{md,html,phtml} (or a DB page of type=doc with the same slug, which overrides the file). Titles here own the sidebar; a doc's own H1 owns its page.",
+  "sections": [
+    {
+      "title": "Getting started",
+      "items": [
+        { "slug": "getting-started", "title": "Introduction" },
+        { "slug": "installation", "title": "Installation" }
+      ]
+    },
+    {
+      "title": "Authoring",
+      "items": [
+        { "slug": "writing-docs", "title": "Writing docs — files & DB" }
+      ]
+    }
+  ]
+}

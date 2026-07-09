@@ -2,20 +2,21 @@
   "schema": "tiger.module/v1",
   "slug": "docs",
   "name": "Documentation",
-  "version": "0.1.0",
-  "description": "A public documentation site for your Tiger app — organized, searchable help pages rendered in your active theme.",
+  "version": "0.2.0",
+  "description": "A public documentation site for your Tiger app — organized help pages rendered in your active theme, served from shipped files or database content.",
   "author": { "name": "WebTigers", "url": "https://webtigers.com" },
   "homepage": "https://github.com/WebTigers/TigerDocs",
   "repository": "https://github.com/WebTigers/TigerDocs",
-  "license": "MIT",
+  "license": "BSD-3-Clause",
   "keywords": ["docs", "documentation", "help", "knowledge-base"],
 
   "requires": { "tiger": ">=1.0", "php": ">=8.1" },
 
   "namespace": "Docs",
   "provides": {
-    "routes":     ["/docs"],
+    "routes":     ["/docs", "/docs/:slug"],
     "acl":        "configs/acl.ini",
+    "content":    "content",
     "migrations": "migrations",
     "assets":     "assets"
   },
