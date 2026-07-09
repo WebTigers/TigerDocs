@@ -23,3 +23,9 @@
     border: 1px solid var(--bs-border-color);
     font-size: .7rem;
 }
+
+/* Anchor jumps ("On this page" links) land BELOW the floating header, not under it —
+   matches the sticky sidebars' top offset. */
+.tiger-docs-body :is(h1, h2, h3, h4, h5, h6)[id] {
+    scroll-margin-top: 4.5rem;
+}
