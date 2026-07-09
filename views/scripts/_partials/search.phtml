@@ -18,7 +18,7 @@ $ph      = (string) $this->escape($this->translate('docs.search.placeholder'));
 $this->placeholder('tigerHeaderSearch')->set(
     '<button type="button" data-docs-search-open'
   . ' class="btn btn-sm d-inline-flex align-items-center gap-2 text-body-secondary border rounded-pill px-3 py-1" style="width:30rem;max-width:100%;">'
-  . '<i class="fa-solid fa-magnifying-glass"></i>'
+  . '<i class="fa-solid fa-search"></i>'
   . '<span class="me-auto">' . $ph . '</span>'
   . '<kbd class="ms-2">⌘K</kbd>'
   . '</button>'
@@ -37,7 +37,7 @@ $this->placeholder('tigerHeaderAuth')->set('');
     <div class="modal-dialog modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <div class="modal-header py-2">
-                <i class="fa-solid fa-magnifying-glass text-body-secondary me-2"></i>
+                <i class="fa-solid fa-search text-body-secondary me-2"></i>
                 <input type="search" class="form-control border-0 shadow-none" data-docs-search-input
                        autocomplete="off" placeholder="<?= $ph ?>" aria-label="<?= $ph ?>">
                 <kbd class="ms-2">Esc</kbd>
