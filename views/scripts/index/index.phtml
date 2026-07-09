@@ -7,12 +7,13 @@
  * $this->tree (sections from the content manifest).
  */
 $tree = $this->tree ?: [];
+$base = (string) ($this->docsBase ?: '/docs');
 ?>
 <div class="container py-4" style="max-width:1160px;">
     <div class="row g-4">
         <aside class="col-lg-3 col-md-4">
             <div class="sticky-top pt-2" style="top:1rem;">
-                <?= $this->partial('_partials/nav.phtml', ['tree' => $tree, 'docSlug' => '']) ?>
+                <?= $this->partial('_partials/nav.phtml', ['tree' => $tree, 'docSlug' => '', 'docsBase' => $base]) ?>
             </div>
         </aside>
 
@@ -37,7 +38,7 @@ $tree = $this->tree ?: [];
                         <ul class="list-unstyled mb-0 d-grid gap-2">
                             <?php foreach ($section['items'] as $item): ?>
                             <li>
-                                <a class="text-decoration-none" href="/docs/<?= $this->escape($item['slug']) ?>">
+                                <a class="text-decoration-none" href="<?= $this->escape($base) ?>/<?= $this->escape($item['slug']) ?>">
                                     <i class="fa-regular fa-file-lines me-2 text-body-secondary"></i><?= $this->escape($item['title']) ?>
                                 </a>
                             </li>

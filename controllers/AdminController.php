@@ -9,15 +9,12 @@
  * route-override config; saving is an /api call (Docs_Service_Settings). ACL-gated admin+
  * (configs/acl.ini). Because it's a real controller, the pretty /docs route override never
  * shadows it (RouteOverride only claims URLs nothing dispatches — see ROUTING.md).
+ *
+ * Extends Tiger_Controller_Admin_Action, so it renders in the admin shell automatically (no
+ * hand-set layout). Build admin screens to the ADMIN.md template.
  */
-class Docs_AdminController extends Tiger_Controller_Action
+class Docs_AdminController extends Tiger_Controller_Admin_Action
 {
-    public function init()
-    {
-        parent::init();
-        $this->_helper->layout()->setLayout('admin');
-    }
-
     public function settingsAction()
     {
         // The effective override (module default merged under any config override), enabled or not.

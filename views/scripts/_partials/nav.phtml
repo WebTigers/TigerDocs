@@ -8,8 +8,9 @@
  */
 $tree   = $this->tree ?: [];
 $active = (string) ($this->docSlug ?? '');
+$base   = (string) ($this->docsBase ?: '/docs');
 ?>
-<a href="/docs" class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-3">
+<a href="<?= $this->escape($base) ?>" class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-3">
     <i class="fa-solid fa-book me-2"></i>Documentation
 </a>
 <nav class="nav flex-column">
@@ -19,7 +20,7 @@ $active = (string) ($this->docSlug ?? '');
     </div>
         <?php foreach ($section['items'] as $item): $on = $active === $item['slug']; ?>
     <a class="nav-link py-1 px-2 rounded <?= $on ? 'active bg-primary-subtle text-primary-emphasis fw-semibold' : 'text-body-secondary' ?>"
-       href="/docs/<?= $this->escape($item['slug']) ?>"><?= $this->escape($item['title']) ?></a>
+       href="<?= $this->escape($base) ?>/<?= $this->escape($item['slug']) ?>"><?= $this->escape($item['title']) ?></a>
         <?php endforeach; ?>
     <?php endforeach; ?>
 </nav>

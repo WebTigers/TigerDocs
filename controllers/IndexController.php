@@ -38,7 +38,8 @@ class Docs_IndexController extends Tiger_Controller_Action
     {
         $locale = $this->_locale();
         $slug   = (string) $this->getParam('slug', '');
-        $this->view->tree = $this->_docs->tree($locale);
+        $this->view->tree     = $this->_docs->tree($locale);
+        $this->view->docsBase = $this->_base();   // active public prefix, so links follow the override
 
         if ($slug === '') {
             $this->view->title   = 'Documentation';
@@ -63,5 +64,17 @@ class Docs_IndexController extends Tiger_Controller_Action
     protected function _locale()
     {
         return defined('LANG') ? LANG : 'en';
+    }
+
+    /**
+     * The docs' active public base path — the effective override prefix (e.g. /docs, or /help
+     * if an admin retargeted it), so every in-page link follows the configured route instead of
+     * a hardcoded /docs. Falls back to /docs when nothing is declared.
+     */
+    protected function _base()
+    {
+        $o = Tiger_Routing_Overrides::get('docs');
+        $prefix = ($o && $o['prefix'] !== '') ? $o['prefix'] : 'docs';
+        return '/' . $prefix;
     }
 }
