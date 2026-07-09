@@ -29,3 +29,13 @@
 .tiger-docs-body :is(h1, h2, h3, h4, h5, h6)[id] {
     scroll-margin-top: 4.5rem;
 }
+
+/* Prev/next pager cards. */
+.docs-pager {
+    color: inherit;
+    transition: background-color .12s ease, border-color .12s ease;
+}
+.docs-pager:hover {
+    background: var(--bs-secondary-bg);
+    border-color: var(--bs-secondary-color) !important;
+}

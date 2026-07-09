@@ -19,6 +19,9 @@ return [
 
     'docs.onthispage'      => 'On this page',
     'docs.filter'          => 'Filter pages…',
+    'docs.prev'            => 'Previous',
+    'docs.next'            => 'Next',
+    'docs.pager'           => 'Documentation pages',
 
     // ⌘K search launcher.
     'docs.search.placeholder' => 'Search docs…',

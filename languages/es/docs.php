@@ -18,6 +18,9 @@ return [
 
     'docs.onthispage'      => 'En esta página',
     'docs.filter'          => 'Filtrar páginas…',
+    'docs.prev'            => 'Anterior',
+    'docs.next'            => 'Siguiente',
+    'docs.pager'           => 'Páginas de documentación',
 
     // Buscador ⌘K.
     'docs.search.placeholder' => 'Buscar en la documentación…',
