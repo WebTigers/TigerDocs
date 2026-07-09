@@ -17,4 +17,5 @@ return [
     'docs.landing.lead'    => 'Guías y referencia para tu aplicación Tiger.',
 
     'docs.onthispage'      => 'En esta página',
+    'docs.filter'          => 'Filtrar páginas…',
 ];
