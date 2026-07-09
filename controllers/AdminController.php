@@ -15,6 +15,12 @@
  */
 class Docs_AdminController extends Tiger_Controller_Admin_Action
 {
+    /** Admin shell (layout) comes from the base; keep the explicit init cascade. */
+    public function init()
+    {
+        parent::init();
+    }
+
     public function settingsAction()
     {
         // The effective override (module default merged under any config override), enabled or not.
