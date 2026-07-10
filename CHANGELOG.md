@@ -4,6 +4,16 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [0.2.1-beta] — 2026-07-10
+
+### Fixed
+- **Build cache now stays inside the app root (cPanel-safe).** The cache's `sys_get_temp_dir()`
+  fallback could land in a location a deploy can't clear (e.g. php-fpm `PrivateTmp`, or a shared/
+  volatile `/tmp` on cPanel), so the index silently went stale. `_cacheDir()` no longer falls back
+  to system tmp — the cache always lives at `<app>/var/cache/tiger-docs`, a known, user-writable,
+  deploy-clearable path. If that isn't writable it simply rebuilds each request (correctness intact).
+  Override with `tiger.docs.cache.dir`.
+
 ## [0.2.0-beta] — 2026-07-10
 
 The stub becomes a real engine: zero-config, multi-source, dual-surface, distributed-cached.
