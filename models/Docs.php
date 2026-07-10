@@ -47,13 +47,30 @@ class Docs_Model_Docs
     /** Absolute path to the module's content/ directory. */
     protected $_contentDir;
 
-    /** Per-request memo of scanned collections: "locale/collection" => [id => node]. */
-    protected static $_scanCache = [];
+    /** @var Docs_Model_Index the per-server build cache in front of the scan. */
+    protected $_indexObj;
 
     public function __construct()
     {
         $dir = dirname(__DIR__) . '/content';
         $this->_contentDir = realpath($dir) ?: $dir;
+    }
+
+    /** The build cache (per-server, fingerprint-invalidated) that fronts the content scan. */
+    protected function _index()
+    {
+        if (!$this->_indexObj) {
+            $this->_indexObj = new Docs_Model_Index($this->_contentDir, function ($locale) {
+                return $this->_build($locale);
+            });
+        }
+        return $this->_indexObj;
+    }
+
+    /** Force a rebuild of the cached index (admin "Rebuild index" / deploy warm). */
+    public function rebuildIndex($locale = 'en')
+    {
+        return $this->_index()->rebuild($locale);
     }
 
     // =====================================================================================
@@ -67,6 +84,12 @@ class Docs_Model_Docs
      * label + order. No `_index` → the humanized folder name, sorted last.
      */
     public function collections($locale = 'en')
+    {
+        return $this->_index()->get($locale)['collections'] ?? [];
+    }
+
+    /** Scan content/<locale>/ subfolders → collections (used by the index builder). */
+    protected function _scanCollections($locale)
     {
         $root = $this->_localeRoot($locale);
         $out  = [];
@@ -105,8 +128,27 @@ class Docs_Model_Docs
      */
     public function tree($locale = 'en', $collection = self::DEFAULT_COLLECTION, $base = '/docs')
     {
-        $flat = $this->_scan($locale, $collection);
+        $collection = $this->_safeSegment($collection) ?: self::DEFAULT_COLLECTION;
+        $nodes  = $this->_index()->get($locale)['trees'][$collection] ?? [];
+        $prefix = rtrim($base, '/') . ($collection === self::DEFAULT_COLLECTION ? '' : '/' . $collection);
+        return $this->_urlize($nodes, $prefix);
+    }
 
+    /** Recursively attach a `url` to each cached node (header → '', page → prefix/id). */
+    protected function _urlize(array $nodes, $prefix)
+    {
+        $out = [];
+        foreach ($nodes as $n) {
+            $n['url']      = !empty($n['header']) ? '' : $prefix . '/' . $n['id'];
+            $n['children'] = empty($n['children']) ? [] : $this->_urlize($n['children'], $prefix);
+            $out[] = $n;
+        }
+        return $out;
+    }
+
+    /** Build the nested node tree (no urls) from a flat scan by linking parent → children (any depth). */
+    protected function _nest(array $flat)
+    {
         $childrenOf = [];
         $roots      = [];
         foreach ($flat as $id => $n) {
@@ -117,10 +159,7 @@ class Docs_Model_Docs
                 $roots[] = $id;
             }
         }
-
-        $prefix = rtrim($base, '/') . ($collection === self::DEFAULT_COLLECTION ? '' : '/' . $collection);
-
-        $build = function (array $ids) use (&$build, $flat, $childrenOf, $prefix) {
+        $build = function (array $ids) use (&$build, $flat, $childrenOf) {
             $out = [];
             foreach ($ids as $id) {
                 $n = $flat[$id];
@@ -128,18 +167,48 @@ class Docs_Model_Docs
                     'id'       => $id,
                     'title'    => $n['title'],
                     'header'   => $n['header'],
-                    'url'      => $n['header'] ? '' : $prefix . '/' . $id,
+                    'order'    => $n['order'],
                     'children' => isset($childrenOf[$id]) ? $build($childrenOf[$id]) : [],
                 ];
             }
-            usort($out, static function ($a, $b) use ($flat) {
-                return ($flat[$a['id']]['order'] <=> $flat[$b['id']]['order'])
-                    ?: strcasecmp($a['title'], $b['title']);
-            });
-            return $out;
+            usort($out, static fn($a, $b) => ($a['order'] <=> $b['order']) ?: strcasecmp($a['title'], $b['title']));
+            return $out;   // cycles (A→B→A) never reach roots → silently excluded, no recursion loop
         };
+        return $build($roots);
+    }
 
-        return $build($roots);   // cycles (A→B→A) never reach roots → silently excluded, no recursion loop
+    /**
+     * The full content scan for a locale — the payload the index caches:
+     *   ['collections' => [...], 'trees' => [collection => nested nodes], 'search' => [entries]]
+     * Called only on a cache miss (build/rebuild); each search entry carries pre-extracted plain
+     * text so query time never touches the disk.
+     */
+    protected function _build($locale)
+    {
+        $collections = $this->_scanCollections($locale);
+        $trees       = [];
+        $search      = [];
+        foreach ($collections as $col) {
+            $flat = $this->_scanNodes($locale, $col['slug']);
+            $trees[$col['slug']] = $this->_nest($flat);
+            foreach ($flat as $id => $n) {
+                if ($n['header']) {
+                    continue;
+                }
+                $file = $this->_findFile($col['slug'], $id, $locale);
+                if (!$file) {
+                    continue;
+                }
+                $search[] = [
+                    'collection' => $col['slug'],
+                    'slug'       => $id,
+                    'title'      => $n['title'],
+                    'section'    => $col['title'],
+                    'text'       => $this->_plain((string) file_get_contents($file['path']), $file['format']),
+                ];
+            }
+        }
+        return ['collections' => $collections, 'trees' => $trees, 'search' => $search];
     }
 
     // =====================================================================================
@@ -195,43 +264,35 @@ class Docs_Model_Docs
         $full  = mb_strtolower($q);
         $words = array_values(array_filter(explode(' ', $full), static fn($w) => $w !== ''));
 
+        // Score over the cached search entries — each carries pre-extracted plain text, so a query
+        // never touches the disk (fast + distributed-friendly).
         $hits = [];
-        foreach ($this->collections($locale) as $col) {
-            $c = $col['slug'];
-            foreach ($this->_scan($locale, $c) as $id => $n) {
-                if ($n['header']) {
-                    continue;
-                }
-                $file = $this->_findFile($c, $id, $locale);
-                if (!$file) {
-                    continue;
-                }
-                $title = $n['title'];
-                $text  = $this->_plain((string) file_get_contents($file['path']), $file['format']);
-                $hay   = mb_strtolower($title . "\n" . $text);
+        foreach (($this->_index()->get($locale)['search'] ?? []) as $e) {
+            $title = (string) $e['title'];
+            $text  = (string) $e['text'];
+            $hay   = mb_strtolower($title . "\n" . $text);
 
-                $score = 0;
-                if (mb_strpos($hay, $full) !== false) {
-                    $score += 50;
-                } elseif (!$this->_allWords($hay, $words)) {
-                    continue;
-                }
-                if (mb_strpos(mb_strtolower($title), $full) !== false) {
-                    $score += 100;
-                }
-                foreach ($words as $w) {
-                    $score += min(substr_count($hay, $w), 5);
-                }
-
-                $hits[] = [
-                    'slug'       => $id,
-                    'collection' => $c,
-                    'title'      => $title,
-                    'section'    => $col['title'],
-                    'snippet'    => $this->_snippet($text, $words, $full),
-                    'score'      => $score,
-                ];
+            $score = 0;
+            if (mb_strpos($hay, $full) !== false) {
+                $score += 50;
+            } elseif (!$this->_allWords($hay, $words)) {
+                continue;
             }
+            if (mb_strpos(mb_strtolower($title), $full) !== false) {
+                $score += 100;
+            }
+            foreach ($words as $w) {
+                $score += min(substr_count($hay, $w), 5);
+            }
+
+            $hits[] = [
+                'slug'       => (string) $e['slug'],
+                'collection' => (string) $e['collection'],
+                'title'      => $title,
+                'section'    => (string) $e['section'],
+                'snippet'    => $this->_snippet($text, $words, $full),
+                'score'      => $score,
+            ];
         }
         usort($hits, static fn($a, $b) => $b['score'] <=> $a['score']);
         return array_slice($hits, 0, max(1, (int) $limit));
@@ -241,14 +302,10 @@ class Docs_Model_Docs
     //  Scanning + metadata
     // =====================================================================================
 
-    /** Scan a collection's files → [id => ['id','title','header','order','parent']] (memoized). */
-    protected function _scan($locale, $collection)
+    /** Scan a collection's files → [id => ['id','title','header','order','parent']]. */
+    protected function _scanNodes($locale, $collection)
     {
         $collection = $this->_safeSegment($collection);
-        $key = $locale . '/' . $collection;
-        if (isset(self::$_scanCache[$key])) {
-            return self::$_scanCache[$key];
-        }
         $flat = [];
         $dir  = $this->_collectionDir($locale, $collection);
         if ($dir) {
@@ -267,7 +324,6 @@ class Docs_Model_Docs
                 ];
             }
         }
-        self::$_scanCache[$key] = $flat;
         return $flat;
     }
 

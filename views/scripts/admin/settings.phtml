@@ -58,6 +58,18 @@ $pattern = (string) $el('route_pattern')->getValue() ?: 'docs';
     </div>
 </form>
 
+<div class="row g-4 mt-1">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="fa-solid fa-database me-2"></i>Search index</div>
+            <div class="card-body">
+                <p class="text-body-secondary mb-3">The nav + search are built by scanning the content files and cached <strong>per server</strong>, rebuilt automatically the moment that server's content changes (a fingerprint check). Rebuild now to force it on <em>this</em> server — handy after editing content or to warm the cache.</p>
+                <button type="button" id="docs-index-rebuild" class="btn btn-outline-secondary"><i class="fa-solid fa-arrows-rotate me-2"></i>Rebuild index</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('docs-settings-form');
@@ -87,6 +99,26 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
     });
+
+    // Rebuild this server's docs index cache.
+    var rebuild = document.getElementById('docs-index-rebuild');
+    if (rebuild) {
+        rebuild.addEventListener('click', function () {
+            var rd = new URLSearchParams();
+            rd.set('module', 'docs'); rd.set('service', 'settings'); rd.set('method', 'rebuild');
+            TigerButton.run(this, function () {
+                return fetch('/api', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: rd })
+                    .then(function (r) { return r.json().catch(function () { return {}; }); });
+            })
+                .then(function (res) {
+                    var msgs = (res && res.messages) || [];
+                    if (msgs.length) { msgs.forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); }); }
+                    else if (res && res.result === 1) { TigerDOM.notify(fb, 'Index rebuilt.', { type: 'success' }); }
+                    else { TigerDOM.notify(fb, 'Rebuild failed.', { type: 'error' }); }
+                })
+                .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
+        });
+    }
 
     // Live URL preview + dim options when the alias is off.
     var pat = document.getElementById('docs-route-pattern');

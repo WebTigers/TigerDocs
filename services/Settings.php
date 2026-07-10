@@ -32,4 +32,23 @@ class Docs_Service_Settings extends Tiger_Service_Service
             $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
         }
     }
+
+    /**
+     * Force a rebuild of THIS server's docs index cache. Handy on a single box or to warm after
+     * editing content; in a multi-server fleet it rebuilds only the node that handled the request
+     * (the others self-heal on their own next content change), so warm each server at deploy.
+     */
+    public function rebuild(array $params): void
+    {
+        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+
+        try {
+            $locale = defined('LANG') ? LANG : 'en';
+            $idx    = (new Docs_Model_Docs())->rebuildIndex($locale);
+            $count  = count($idx['search'] ?? []);
+            $this->_success(['pages' => $count], 'docs.index.rebuilt');
+        } catch (Throwable $e) {
+            $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
+        }
+    }
 }

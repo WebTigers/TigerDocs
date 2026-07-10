@@ -10,6 +10,7 @@ return [
     'docs.home'           => 'Docs',
     'docs.notfound'       => 'No se encontró ese documento.',
     'docs.settings.saved' => 'Configuración de Docs guardada.',
+    'docs.index.rebuilt'  => 'Índice de documentación reconstruido en este servidor.',
 
     // Landing chrome (localized so the docs home follows the language switch).
     'docs.landing.eyebrow' => 'Documentación',
