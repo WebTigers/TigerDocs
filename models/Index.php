@@ -173,18 +173,24 @@ class Docs_Model_Index
         }
     }
 
-    /** Writable per-server cache dir: config override → app var/cache → system temp (always works). */
+    /**
+     * Writable per-server cache dir: config override → a predictable app `var/cache` (when the app
+     * root is writable — persistent, inspectable, survives an fpm restart) → system temp (always
+     * writable; the right fallback for read-only / containerized deploys — the cache just rebuilds).
+     */
     protected function _cacheDir()
     {
         $dir = (string) $this->_cfg('cache.dir', '');
-        if ($dir === '') {
-            if (defined('APPLICATION_PATH') && is_dir(dirname(APPLICATION_PATH) . '/var')) {
-                $dir = dirname(APPLICATION_PATH) . '/var/cache/tiger-docs';
-            } else {
-                $dir = sys_get_temp_dir() . '/tiger-docs-' . substr(md5($this->_contentDir), 0, 8);
+        if ($dir !== '') {
+            return rtrim($dir, '/');
+        }
+        if (defined('APPLICATION_PATH')) {
+            $base = dirname(APPLICATION_PATH);
+            if (is_dir($base . '/var/cache') || is_writable($base) || is_writable($base . '/var')) {
+                return $base . '/var/cache/tiger-docs';
             }
         }
-        return rtrim($dir, '/');
+        return sys_get_temp_dir() . '/tiger-docs-' . substr(md5($this->_contentDir), 0, 8);
     }
 
     // ---- Config (tiger.docs.* → docs.*), tolerant of a missing registry ------------------------
