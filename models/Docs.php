@@ -2,41 +2,43 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
 /**
- * Docs_Model_Docs — the zero-config, scan-based documentation engine.
+ * Docs_Model_Docs — the zero-config, multi-source documentation engine.
  *
- * There is NO manifest. The content directory IS the configuration:
+ * There is NO manifest. A COLLECTION is just "a directory of doc files" (+ an `_index.md`), and
+ * those directories come from two kinds of source, aggregated automatically:
  *
- *   content/<locale>/<collection>/            ← a subfolder is a COLLECTION (the top-level dropdown)
- *     _index.md                               ← the collection's label (translatable) + order + landing
- *     why-tiger.md, getting-started.md, …     ← flat files; hierarchy lives in each file's metadata
+ *   1. PLATFORM content — each subfolder of the module's content/<locale>/ dir (Guide, CMS, …).
+ *   2. MODULE docs — each ACTIVE module that ships a `<module>/docs/<locale>/` folder becomes its
+ *      own collection (slug = module name). Self-documenting modules: drop a docs/ folder and it
+ *      appears; deactivate the module and it's gone. (Toggle with `docs.modules.scan`.)
  *
- * Each file self-describes in a leading HTML comment (invisible when rendered, trivially scannable):
+ * Every file self-describes in a leading HTML comment (invisible when rendered):
  *
  *   <!-- tiger:doc
- *   parent: getting-started      # id of the parent node → arbitrary-depth tree (omit = top level)
- *   order:  20                   # float among siblings; 5.22 slots between 5 and 6; first | last
- *   title:  Your first module    # optional; falls back to the first # H1, then the humanized id
- *   header: true                 # optional; a label-only node (no page), just groups children
+ *   parent:     getting-started   # id of the parent node → arbitrary-depth tree
+ *   order:      20                # float among siblings; 5.22 slots between 5 and 6; first | last
+ *   title:      Your first module # optional; else the first # H1, then the humanized id
+ *   header:     true              # optional; a label-only node (no page)
+ *   visibility: public            # public (default) | admin — which SURFACE it shows on
  *   -->
  *
- * A file with no block still shows up (ungrouped, last) — metadata is pure refinement. The nav tree
- * is built by linking `parent` → children recursively, so it nests as deep as you like. Collection
- * labels + section labels are files, so they translate per-locale (with en fallback).
+ * VISIBILITY splits one engine into two surfaces: the public site (`/docs`, guests) shows
+ * `public` docs; the in-admin help center shows `admin` docs (how to operate a module). A file's
+ * visibility defaults to its collection's `_index` visibility, which defaults to `public`.
  *
- * Doc bodies still resolve dual-source (a DB `page` of type `doc` overrides a file — the live
- * per-tenant override tier), and everything renders through Tiger_Cms_Renderer.
+ * Everything is fronted by Docs_Model_Index — a per-server, fingerprint-invalidated build cache
+ * that spans all source dirs (see that class). DB docs remain the resolve-time override tier.
  *
  * @api
  */
 class Docs_Model_Docs
 {
-    /** page.type for DB-backed docs (distinct from CMS pages so they never answer at root). */
-    const TYPE_DOC = 'doc';
+    const TYPE_DOC           = 'doc';
+    const DEFAULT_COLLECTION = 'guide';   // served prefix-less at /docs on the public surface
+    const VIS_PUBLIC         = 'public';
+    const VIS_ADMIN          = 'admin';
 
-    /** The default collection — served prefix-less at /docs (others at /docs/<collection>). */
-    const DEFAULT_COLLECTION = 'guide';
-
-    /** ext => Tiger_Cms_Renderer format. The set of file types a doc may ship as. */
+    /** ext => Tiger_Cms_Renderer format. */
     protected static $_formats = [
         'md'    => Tiger_Model_Page::FORMAT_MARKDOWN,
         'html'  => Tiger_Model_Page::FORMAT_HTML,
@@ -44,11 +46,11 @@ class Docs_Model_Docs
         'phtml' => Tiger_Model_Page::FORMAT_PHTML,
     ];
 
-    /** Absolute path to the module's content/ directory. */
     protected $_contentDir;
-
-    /** @var Docs_Model_Index the per-server build cache in front of the scan. */
     protected $_indexObj;
+
+    /** Per-request memo of collection sources, per locale. */
+    protected static $_sources = [];
 
     public function __construct()
     {
@@ -56,85 +58,189 @@ class Docs_Model_Docs
         $this->_contentDir = realpath($dir) ?: $dir;
     }
 
-    /** The build cache (per-server, fingerprint-invalidated) that fronts the content scan. */
+    // =====================================================================================
+    //  Cache
+    // =====================================================================================
+
+    /** The build cache (per-server, fingerprint-invalidated) that fronts the multi-source scan. */
     protected function _index()
     {
         if (!$this->_indexObj) {
-            $this->_indexObj = new Docs_Model_Index($this->_contentDir, function ($locale) {
-                return $this->_build($locale);
-            });
+            $this->_indexObj = new Docs_Model_Index(
+                $this->_contentDir,
+                function ($locale) { return $this->_build($locale); },
+                function ($locale) { return $this->_roots($locale); }
+            );
         }
         return $this->_indexObj;
     }
 
-    /** Force a rebuild of the cached index (admin "Rebuild index" / deploy warm). */
+    /** Force a rebuild of this server's cached index (admin "Rebuild index" / deploy warm). */
     public function rebuildIndex($locale = 'en')
     {
         return $this->_index()->rebuild($locale);
     }
 
     // =====================================================================================
-    //  Collections (the top-level dropdown)
+    //  Collection sources (platform content + active-module docs)
     // =====================================================================================
 
     /**
-     * Every collection for the locale (en fallback), sorted by order then title. Each:
-     *   ['slug' => 'guide', 'title' => 'Guide', 'order' => 10.0]
-     * A subfolder of content/<locale>/ is a collection; its `_index.*` supplies the (translatable)
-     * label + order. No `_index` → the humanized folder name, sorted last.
+     * All collection sources for a locale, keyed by slug:
+     *   [slug => ['slug','dir','enDir','defaultVis','source' => 'platform'|'module']]
+     * Platform subfolders first (they win a slug collision), then active-module docs/ dirs.
      */
-    public function collections($locale = 'en')
+    protected function _sources($locale)
     {
-        return $this->_index()->get($locale)['collections'] ?? [];
-    }
+        $locale = $this->_safeSegment($locale) ?: 'en';
+        if (isset(self::$_sources[$locale])) {
+            return self::$_sources[$locale];
+        }
 
-    /** Scan content/<locale>/ subfolders → collections (used by the index builder). */
-    protected function _scanCollections($locale)
-    {
-        $root = $this->_localeRoot($locale);
-        $out  = [];
-        foreach ((glob($root . '/*', GLOB_ONLYDIR) ?: []) as $dir) {
-            $slug = basename($dir);
+        $out = [];
+
+        // 1) Platform collections — subfolders of content/en (canonical) ∪ content/<locale>.
+        $names = [];
+        foreach ([$this->_contentDir . '/en', $this->_contentDir . '/' . $locale] as $root) {
+            foreach ((glob($root . '/*', GLOB_ONLYDIR) ?: []) as $dir) {
+                $names[basename($dir)] = true;
+            }
+        }
+        foreach (array_keys($names) as $slug) {
             if ($this->_safeSegment($slug) === '') {
                 continue;
             }
-            $meta = $this->_indexMeta($slug, $locale);
-            $out[] = [
-                'slug'  => $slug,
-                'title' => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($slug),
-                'order' => $this->_order($meta['order'] ?? null),
-            ];
+            $out[$slug] = $this->_descriptor(
+                $slug,
+                $this->_contentDir . '/' . $locale . '/' . $slug,
+                $this->_contentDir . '/en/' . $slug,
+                'platform'
+            );
         }
-        usort($out, static fn($a, $b) => ($a['order'] <=> $b['order']) ?: strcasecmp($a['title'], $b['title']));
+
+        // 2) Module collections — each active module that ships a docs/ folder.
+        if ($this->_cfgBool('modules.scan', true)) {
+            foreach ($this->_moduleDocsRoots() as $slug => $docsRoot) {
+                if (isset($out[$slug]) || $this->_safeSegment($slug) === '') {
+                    continue;   // platform collection wins a slug collision
+                }
+                $out[$slug] = $this->_descriptor($slug, $docsRoot . '/' . $locale, $docsRoot . '/en', 'module');
+            }
+        }
+
+        // Drop sources that resolve to no directory at all.
+        $out = array_filter($out, static fn($d) => $d['dir'] !== null || $d['enDir'] !== null);
+
+        return self::$_sources[$locale] = $out;
+    }
+
+    /** Build one source descriptor, resolving its locale + en dirs and default visibility. */
+    protected function _descriptor($slug, $localeDir, $enDir, $source)
+    {
+        $d = [
+            'slug'   => $slug,
+            'dir'    => is_dir($localeDir) ? $localeDir : null,
+            'enDir'  => is_dir($enDir) ? $enDir : null,
+            'source' => $source,
+        ];
+        $meta = $this->_indexMeta($d);
+        $d['defaultVis'] = $this->_vis($meta['visibility'] ?? null);
+        return $d;
+    }
+
+    /** [moduleSlug => absolute docs/ path] for every ACTIVE module that ships a docs/ folder. */
+    protected function _moduleDocsRoots()
+    {
+        $out = [];
+        try {
+            $inactive = array_flip((new Tiger_Model_Module())->inactiveSlugs());
+        } catch (Throwable $e) {
+            $inactive = [];   // no DB/table yet → treat all discovered modules as active
+        }
+        foreach (Tiger_Module_Discovery::all() as $slug => $m) {
+            if (isset($inactive[$slug])) {
+                continue;
+            }
+            $base = ($m['area'] === 'app' && defined('APPLICATION_PATH')) ? APPLICATION_PATH
+                  : (defined('TIGER_CORE_PATH') ? TIGER_CORE_PATH : null);
+            if ($base === null) {
+                continue;
+            }
+            $docs = $base . '/modules/' . $slug . '/docs';
+            if (is_dir($docs)) {
+                $out[$slug] = $docs;
+            }
+        }
         return $out;
     }
 
-    /** The set of collection slugs (for the controller to split a URL's leading segment). */
-    public function collectionSlugs($locale = 'en')
+    /** The directories to fingerprint for a locale (all source dirs — platform + module). */
+    protected function _roots($locale)
     {
-        return array_map(static fn($c) => $c['slug'], $this->collections($locale));
+        $roots = [];
+        foreach ($this->_sources($locale) as $d) {
+            foreach ([$d['dir'], $d['enDir']] as $dir) {
+                if ($dir !== null) {
+                    $roots[$dir] = true;
+                }
+            }
+        }
+        return array_keys($roots);
     }
 
     // =====================================================================================
-    //  Tree (the recursive sidebar nav for one collection)
+    //  Collections + tree (per surface / visibility)
     // =====================================================================================
 
-    /**
-     * The nested nav tree for a collection — arbitrary depth. Top-level list of nodes; each:
-     *   ['id','title','header'=>bool,'url'=>string,'children'=>[ …same… ]]
-     * Built by linking each file's `parent` to its children. A `header` node has no url (label
-     * only). `$base` is the docs public prefix (e.g. /docs); guide links are prefix-less, other
-     * collections are namespaced under /<base>/<collection>/.
-     */
-    public function tree($locale = 'en', $collection = self::DEFAULT_COLLECTION, $base = '/docs')
+    /** Collections visible on a surface, sorted: [ ['slug','title','order','vis'], … ]. */
+    public function collections($locale = 'en', $visibility = self::VIS_PUBLIC)
     {
-        $collection = $this->_safeSegment($collection) ?: self::DEFAULT_COLLECTION;
-        $nodes  = $this->_index()->get($locale)['trees'][$collection] ?? [];
-        $prefix = rtrim($base, '/') . ($collection === self::DEFAULT_COLLECTION ? '' : '/' . $collection);
+        $vis = $this->_vis($visibility);
+        return array_values(array_filter(
+            $this->_index()->get($locale)['collections'] ?? [],
+            static fn($c) => !empty($c['vis'][$vis])
+        ));
+    }
+
+    /** Collection slugs visible on a surface (for the controller's URL split). */
+    public function collectionSlugs($locale = 'en', $visibility = self::VIS_PUBLIC)
+    {
+        return array_map(static fn($c) => $c['slug'], $this->collections($locale, $visibility));
+    }
+
+    /**
+     * The nested nav tree for a collection on a surface — visibility-filtered + url-stamped.
+     * $default is the prefix-less collection ('guide' public, '' admin → everything namespaced).
+     */
+    public function tree($locale = 'en', $collection = self::DEFAULT_COLLECTION, $base = '/docs',
+                         $visibility = self::VIS_PUBLIC, $default = self::DEFAULT_COLLECTION)
+    {
+        $collection = $this->_safeSegment($collection);
+        $nodes  = $this->_filterVis($this->_index()->get($locale)['trees'][$collection] ?? [], $this->_vis($visibility));
+        $prefix = rtrim($base, '/') . (($default !== '' && $collection === $default) ? '' : '/' . $collection);
         return $this->_urlize($nodes, $prefix);
     }
 
-    /** Recursively attach a `url` to each cached node (header → '', page → prefix/id). */
+    /** Keep pages of the wanted visibility; keep a header only if it has ≥1 matching descendant. */
+    protected function _filterVis(array $nodes, $vis)
+    {
+        $out = [];
+        foreach ($nodes as $n) {
+            if (!empty($n['header'])) {
+                $kids = $this->_filterVis($n['children'] ?? [], $vis);
+                if ($kids) {
+                    $n['children'] = $kids;
+                    $out[] = $n;
+                }
+            } elseif (($n['visibility'] ?? self::VIS_PUBLIC) === $vis) {
+                $n['children'] = $this->_filterVis($n['children'] ?? [], $vis);
+                $out[] = $n;
+            }
+        }
+        return $out;
+    }
+
+    /** Recursively attach a `url` to each node (header → '', page → prefix/id). */
     protected function _urlize(array $nodes, $prefix)
     {
         $out = [];
@@ -146,89 +252,31 @@ class Docs_Model_Docs
         return $out;
     }
 
-    /** Build the nested node tree (no urls) from a flat scan by linking parent → children (any depth). */
-    protected function _nest(array $flat)
-    {
-        $childrenOf = [];
-        $roots      = [];
-        foreach ($flat as $id => $n) {
-            $p = $n['parent'];
-            if ($p !== '' && $p !== $id && isset($flat[$p])) {
-                $childrenOf[$p][] = $id;
-            } else {
-                $roots[] = $id;
-            }
-        }
-        $build = function (array $ids) use (&$build, $flat, $childrenOf) {
-            $out = [];
-            foreach ($ids as $id) {
-                $n = $flat[$id];
-                $out[] = [
-                    'id'       => $id,
-                    'title'    => $n['title'],
-                    'header'   => $n['header'],
-                    'order'    => $n['order'],
-                    'children' => isset($childrenOf[$id]) ? $build($childrenOf[$id]) : [],
-                ];
-            }
-            usort($out, static fn($a, $b) => ($a['order'] <=> $b['order']) ?: strcasecmp($a['title'], $b['title']));
-            return $out;   // cycles (A→B→A) never reach roots → silently excluded, no recursion loop
-        };
-        return $build($roots);
-    }
-
-    /**
-     * The full content scan for a locale — the payload the index caches:
-     *   ['collections' => [...], 'trees' => [collection => nested nodes], 'search' => [entries]]
-     * Called only on a cache miss (build/rebuild); each search entry carries pre-extracted plain
-     * text so query time never touches the disk.
-     */
-    protected function _build($locale)
-    {
-        $collections = $this->_scanCollections($locale);
-        $trees       = [];
-        $search      = [];
-        foreach ($collections as $col) {
-            $flat = $this->_scanNodes($locale, $col['slug']);
-            $trees[$col['slug']] = $this->_nest($flat);
-            foreach ($flat as $id => $n) {
-                if ($n['header']) {
-                    continue;
-                }
-                $file = $this->_findFile($col['slug'], $id, $locale);
-                if (!$file) {
-                    continue;
-                }
-                $search[] = [
-                    'collection' => $col['slug'],
-                    'slug'       => $id,
-                    'title'      => $n['title'],
-                    'section'    => $col['title'],
-                    'text'       => $this->_plain((string) file_get_contents($file['path']), $file['format']),
-                ];
-            }
-        }
-        return ['collections' => $collections, 'trees' => $trees, 'search' => $search];
-    }
-
     // =====================================================================================
     //  Resolve one doc (landing = the collection's _index)
     // =====================================================================================
 
     /**
      * Resolve a doc → normalized array or null (→ 404):
-     *   ['slug','collection','title','html','headings','format','source' => 'db'|'file']
-     * An empty slug resolves the collection's `_index` (the landing). DB docs (type=doc, keyed
-     * `<collection>/<slug>`) override files — the per-tenant live-override tier.
+     *   ['slug','collection','title','html','headings','format','visibility','source']
+     * A page whose visibility doesn't match the requesting surface returns null (a public URL can't
+     * serve an admin doc, and vice-versa). Empty slug = the collection's _index (landing).
      */
-    public function resolve($slug, $locale = 'en', $orgId = '', $collection = self::DEFAULT_COLLECTION)
+    public function resolve($slug, $locale = 'en', $orgId = '', $collection = self::DEFAULT_COLLECTION,
+                            $visibility = self::VIS_PUBLIC)
     {
-        $collection = $this->_safeSegment($collection) ?: self::DEFAULT_COLLECTION;
+        $collection = $this->_safeSegment($collection);
+        $sources    = $this->_sources($locale);
+        if ($collection === '' || !isset($sources[$collection])) {
+            return null;
+        }
+        $desc = $sources[$collection];
+        $vis  = $this->_vis($visibility);
 
-        // Landing: the collection's _index (reserved; not URL-addressable — leading "_" is rejected).
+        // Landing: the collection's _index (the controller already gated collection ∈ surface).
         if ((string) $slug === '') {
-            $file = $this->_findFile($collection, '_index', $locale);
-            return $file ? $this->_renderFile($file, '', $collection) : null;
+            $file = $this->_findFileIn($desc, '_index');
+            return $file ? $this->_renderFile($file, '', $collection, $desc['defaultVis']) : null;
         }
 
         $slug = $this->_normalizeSlug($slug);
@@ -236,38 +284,42 @@ class Docs_Model_Docs
             return null;
         }
 
-        $page = $this->_dbDoc($collection . '/' . $slug, $locale, $orgId);
-        if ($page) {
-            return $this->_renderPage($page, $slug, $collection);
+        // DB override (public surface only — DB docs are the public per-tenant override tier).
+        if ($vis === self::VIS_PUBLIC) {
+            $page = $this->_dbDoc($collection . '/' . $slug, $locale, $orgId);
+            if ($page) {
+                return $this->_renderPage($page, $slug, $collection);
+            }
         }
 
-        $file = $this->_findFile($collection, $slug, $locale);
-        return $file ? $this->_renderFile($file, $slug, $collection) : null;
+        $file = $this->_findFileIn($desc, $slug);
+        if (!$file) {
+            return null;
+        }
+        $doc = $this->_renderFile($file, $slug, $collection, $desc['defaultVis']);
+        return ($doc['visibility'] === $vis) ? $doc : null;   // wrong surface → 404
     }
 
     // =====================================================================================
-    //  Search (across every collection)
+    //  Search (per surface)
     // =====================================================================================
 
-    /**
-     * Full-text-ish search across every collection's file docs, in the caller's locale (en fallback
-     * per file). Returns ranked hits, best first:
-     *   [ ['slug','collection','title','section' => collection label,'snippet','score'], … ]
-     * Header nodes (label-only) are skipped. DB docs aren't indexed here yet.
-     */
-    public function search($q, $locale = 'en', $limit = 8)
+    /** Search a surface's docs. Ranked hits: [ ['slug','collection','title','section','snippet','score'], … ]. */
+    public function search($q, $locale = 'en', $visibility = self::VIS_PUBLIC, $limit = 8)
     {
         $q = trim(preg_replace('/\s+/', ' ', (string) $q));
         if (mb_strlen($q) < 2) {
             return [];
         }
+        $vis   = $this->_vis($visibility);
         $full  = mb_strtolower($q);
         $words = array_values(array_filter(explode(' ', $full), static fn($w) => $w !== ''));
 
-        // Score over the cached search entries — each carries pre-extracted plain text, so a query
-        // never touches the disk (fast + distributed-friendly).
         $hits = [];
         foreach (($this->_index()->get($locale)['search'] ?? []) as $e) {
+            if (($e['visibility'] ?? self::VIS_PUBLIC) !== $vis) {
+                continue;
+            }
             $title = (string) $e['title'];
             $text  = (string) $e['text'];
             $hay   = mb_strtolower($title . "\n" . $text);
@@ -299,75 +351,120 @@ class Docs_Model_Docs
     }
 
     // =====================================================================================
-    //  Scanning + metadata
+    //  Build (called by the index on a cache miss)
     // =====================================================================================
 
-    /** Scan a collection's files → [id => ['id','title','header','order','parent']]. */
-    protected function _scanNodes($locale, $collection)
+    /**
+     * The full multi-source scan for a locale — the payload the index caches:
+     *   ['collections' => [...], 'trees' => [slug => nested nodes], 'search' => [entries]]
+     * Each node/entry carries `visibility`; each collection carries the visibilities it contains.
+     */
+    protected function _build($locale)
     {
-        $collection = $this->_safeSegment($collection);
+        $collections = [];
+        $trees       = [];
+        $search      = [];
+
+        foreach ($this->_sources($locale) as $slug => $desc) {
+            $flat = $this->_scanNodes($desc);
+            $trees[$slug] = $this->_nest($flat);
+
+            $meta = $this->_indexMeta($desc);
+            $vis  = [$desc['defaultVis'] => true];   // a collection is at least its _index visibility
+            foreach ($flat as $id => $n) {
+                if ($n['header']) {
+                    continue;
+                }
+                $vis[$n['visibility']] = true;
+                $file = $this->_findFileIn($desc, $id);
+                if (!$file) {
+                    continue;
+                }
+                $search[] = [
+                    'collection' => $slug,
+                    'slug'       => $id,
+                    'title'      => $n['title'],
+                    'section'    => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($slug),
+                    'visibility' => $n['visibility'],
+                    'text'       => $this->_plain((string) file_get_contents($file['path']), $file['format']),
+                ];
+            }
+
+            $collections[] = [
+                'slug'  => $slug,
+                'title' => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($slug),
+                'order' => $this->_order($meta['order'] ?? null),
+                'vis'   => $vis,
+            ];
+        }
+
+        usort($collections, static fn($a, $b) => ($a['order'] <=> $b['order']) ?: strcasecmp($a['title'], $b['title']));
+        return ['collections' => $collections, 'trees' => $trees, 'search' => $search];
+    }
+
+    /** Scan a source's files → [id => ['id','title','header','order','parent','visibility']]. */
+    protected function _scanNodes(array $desc)
+    {
+        $dir = $desc['dir'] ?: $desc['enDir'];
         $flat = [];
-        $dir  = $this->_collectionDir($locale, $collection);
         if ($dir) {
             foreach ((glob($dir . '/*.{md,markdown,html,htm,phtml}', GLOB_BRACE) ?: []) as $path) {
                 $id = preg_replace('/\.[^.]+$/', '', basename($path));
                 if ($id === '_index' || $this->_safeSegment($id) === '') {
-                    continue;   // _index is the collection landing, not a nav node
+                    continue;
                 }
                 $meta = $this->_meta($path);
                 $flat[$id] = [
-                    'id'     => $id,
-                    'title'  => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($id),
-                    'header' => $this->_bool($meta['header'] ?? ''),
-                    'order'  => $this->_order($meta['order'] ?? null),
-                    'parent' => $this->_safeSegment($meta['parent'] ?? ''),
+                    'id'         => $id,
+                    'title'      => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($id),
+                    'header'     => $this->_bool($meta['header'] ?? ''),
+                    'order'      => $this->_order($meta['order'] ?? null),
+                    'parent'     => $this->_safeSegment($meta['parent'] ?? ''),
+                    'visibility' => $this->_vis($meta['visibility'] ?? $desc['defaultVis']),
                 ];
             }
         }
         return $flat;
     }
 
-    /** Parse a file's leading `<!-- tiger:doc … -->` block into a key=>value map (reads the head only). */
-    protected function _meta($path)
+    /** Build the nested node tree (no urls) from a flat scan — arbitrary depth. */
+    protected function _nest(array $flat)
     {
-        $head = (string) @file_get_contents($path, false, null, 0, 2048);
-        return $this->_metaFromBody($head);
-    }
-
-    /** Parse the tiger:doc block out of a body/head string. */
-    protected function _metaFromBody($body)
-    {
-        if (!preg_match('/<!--\s*tiger:doc\b(.*?)-->/is', (string) $body, $m)) {
-            return [];
-        }
-        $meta = [];
-        foreach (preg_split('/\r?\n/', trim($m[1])) as $line) {
-            if (preg_match('/^\s*([a-z_]+)\s*:\s*(.*?)\s*$/i', $line, $mm)) {
-                $meta[strtolower($mm[1])] = trim($mm[2]);
+        $childrenOf = [];
+        $roots      = [];
+        foreach ($flat as $id => $n) {
+            $p = $n['parent'];
+            if ($p !== '' && $p !== $id && isset($flat[$p])) {
+                $childrenOf[$p][] = $id;
+            } else {
+                $roots[] = $id;
             }
         }
-        return $meta;
-    }
-
-    /** The `_index.*` metadata for a collection (locale then en). */
-    protected function _indexMeta($collection, $locale)
-    {
-        $file = $this->_findFile($collection, '_index', $locale);
-        return $file ? $this->_meta($file['path']) : [];
-    }
-
-    /** Remove the leading tiger:doc comment block so it doesn't render / get indexed. */
-    protected function _stripMeta($body)
-    {
-        return preg_replace('/^\s*<!--\s*tiger:doc\b.*?-->\s*/is', '', (string) $body, 1);
+        $build = function (array $ids) use (&$build, $flat, $childrenOf) {
+            $out = [];
+            foreach ($ids as $id) {
+                $n = $flat[$id];
+                $out[] = [
+                    'id'         => $id,
+                    'title'      => $n['title'],
+                    'header'     => $n['header'],
+                    'order'      => $n['order'],
+                    'visibility' => $n['visibility'],
+                    'children'   => isset($childrenOf[$id]) ? $build($childrenOf[$id]) : [],
+                ];
+            }
+            usort($out, static fn($a, $b) => ($a['order'] <=> $b['order']) ?: strcasecmp($a['title'], $b['title']));
+            return $out;
+        };
+        return $build($roots);
     }
 
     // =====================================================================================
     //  Rendering
     // =====================================================================================
 
-    /** Render a file doc → the normalized array. $slug '' means the landing (_index). */
-    protected function _renderFile(array $file, $slug, $collection)
+    /** Render a file doc → normalized array. $slug '' = the landing (_index). */
+    protected function _renderFile(array $file, $slug, $collection, $defaultVis)
     {
         $raw  = (string) file_get_contents($file['path']);
         $meta = $this->_metaFromBody($raw);
@@ -380,11 +477,12 @@ class Docs_Model_Docs
             'html'       => $html,
             'headings'   => $this->_pageNav($html),
             'format'     => $file['format'],
+            'visibility' => $this->_vis($meta['visibility'] ?? $defaultVis),
             'source'     => 'file',
         ];
     }
 
-    /** Render a DB doc row → the normalized array. */
+    /** Render a DB doc row → normalized array (always public). */
     protected function _renderPage($page, $slug, $collection)
     {
         $html = (new Tiger_Cms_Renderer())->render($page);
@@ -395,14 +493,12 @@ class Docs_Model_Docs
             'html'       => $html,
             'headings'   => $this->_pageNav($html),
             'format'     => (string) $page->format,
+            'visibility' => self::VIS_PUBLIC,
             'source'     => 'db',
         ];
     }
 
-    /**
-     * Give the body's headings (h2/h3) stable ids and return the "on this page" outline:
-     *   [ ['level' => 2|3, 'text' => '…', 'id' => '…'], … ]
-     */
+    /** Give h2/h3 stable ids + return the "on this page" outline. */
     protected function _pageNav(&$html)
     {
         $out  = [];
@@ -419,7 +515,6 @@ class Docs_Model_Docs
             while (isset($used[$id])) { $id = $base . '-' . $i++; }
             $used[$id] = true;
             $out[] = ['level' => $level, 'text' => $text, 'id' => $id];
-
             if (stripos($attrs, 'id=') === false) {
                 $attrs = ' id="' . $id . '"' . $attrs;
             }
@@ -429,10 +524,10 @@ class Docs_Model_Docs
     }
 
     // =====================================================================================
-    //  Files, paths, small helpers
+    //  Files, metadata, small helpers
     // =====================================================================================
 
-    /** Resolve a DB doc row, tolerating a missing page table (fresh install → files only). */
+    /** Resolve a DB doc row, tolerating a missing page table. */
     protected function _dbDoc($slug, $locale, $orgId)
     {
         try {
@@ -442,55 +537,65 @@ class Docs_Model_Docs
         }
     }
 
-    /**
-     * Find a file for a collection + name: try the requested locale then `en`, each extension.
-     * `$name` is either a normalized slug or the reserved '_index'. Returns ['path','format'] or
-     * null; every candidate is confirmed to sit INSIDE the content dir (traversal defense).
-     */
-    protected function _findFile($collection, $name, $locale)
+    /** Find a file within a source (locale dir then en dir), each extension. '_index' allowed. */
+    protected function _findFileIn(array $desc, $name)
     {
-        $collection = $this->_safeSegment($collection);
-        if ($collection === '' || ($name !== '_index' && $this->_safeSegment($name) === '')) {
+        if ($name !== '_index' && $this->_safeSegment($name) === '') {
             return null;
         }
-        $locales = array_values(array_unique([$this->_safeSegment($locale) ?: 'en', 'en']));
-        foreach ($locales as $loc) {
+        foreach (array_unique(array_filter([$desc['dir'], $desc['enDir']])) as $dir) {
+            $real = realpath($dir);
+            if (!$real) {
+                continue;
+            }
             foreach (self::$_formats as $ext => $format) {
-                $path = $this->_contentDir . '/' . $loc . '/' . $collection . '/' . $name . '.' . $ext;
-                $real = realpath($path);
-                if ($real && strpos($real, $this->_contentDir . DIRECTORY_SEPARATOR) === 0 && is_file($real)) {
-                    return ['path' => $real, 'format' => $format];
+                $path = realpath($dir . '/' . $name . '.' . $ext);
+                if ($path && strpos($path, $real . DIRECTORY_SEPARATOR) === 0 && is_file($path)) {
+                    return ['path' => $path, 'format' => $format];
                 }
             }
         }
         return null;
     }
 
-    /** content/<locale> if it exists, else content/en (locale-level fallback for collection scans). */
-    protected function _localeRoot($locale)
+    /** The `_index.*` metadata for a source. */
+    protected function _indexMeta(array $desc)
     {
-        $loc = $this->_safeSegment($locale) ?: 'en';
-        $dir = $this->_contentDir . '/' . $loc;
-        return is_dir($dir) ? $dir : $this->_contentDir . '/en';
+        $file = $this->_findFileIn($desc, '_index');
+        return $file ? $this->_meta($file['path']) : [];
     }
 
-    /** content/<locale>/<collection> if it exists, else content/en/<collection>, else null. */
-    protected function _collectionDir($locale, $collection)
+    /** Parse a file's leading `<!-- tiger:doc … -->` block (reads the head only). */
+    protected function _meta($path)
     {
-        $collection = $this->_safeSegment($collection);
-        if ($collection === '') {
-            return null;
+        return $this->_metaFromBody((string) @file_get_contents($path, false, null, 0, 2048));
+    }
+
+    protected function _metaFromBody($body)
+    {
+        if (!preg_match('/<!--\s*tiger:doc\b(.*?)-->/is', (string) $body, $m)) {
+            return [];
         }
-        foreach (array_unique([$this->_safeSegment($locale) ?: 'en', 'en']) as $loc) {
-            $dir = $this->_contentDir . '/' . $loc . '/' . $collection;
-            if (is_dir($dir)) {
-                return $dir;
+        $meta = [];
+        foreach (preg_split('/\r?\n/', trim($m[1])) as $line) {
+            if (preg_match('/^\s*([a-z_]+)\s*:\s*(.*?)\s*$/i', $line, $mm)) {
+                $meta[strtolower($mm[1])] = trim($mm[2]);
             }
         }
-        return null;
+        return $meta;
     }
 
-    /** 'first' → -INF, 'last' → +INF, numeric → float, else a large default (unordered sort last). */
+    protected function _stripMeta($body)
+    {
+        return preg_replace('/^\s*<!--\s*tiger:doc\b.*?-->\s*/is', '', (string) $body, 1);
+    }
+
+    /** Normalize a visibility value to 'public' (default) or 'admin'. */
+    protected function _vis($v)
+    {
+        return strtolower(trim((string) $v)) === self::VIS_ADMIN ? self::VIS_ADMIN : self::VIS_PUBLIC;
+    }
+
     protected function _order($v)
     {
         $v = strtolower(trim((string) $v));
@@ -499,26 +604,22 @@ class Docs_Model_Docs
         return is_numeric($v) ? (float) $v : 1000000.0;
     }
 
-    /** Truthy metadata flag. */
     protected function _bool($v)
     {
         return in_array(strtolower(trim((string) $v)), ['1', 'true', 'yes', 'on'], true);
     }
 
-    /** "getting-started" → "Getting started". */
     protected function _humanize($slug)
     {
         return ucfirst(str_replace(['-', '_'], ' ', trim((string) $slug)));
     }
 
-    /** Normalize a single URL slug segment to a safe token, or '' (→ 404). */
     protected function _normalizeSlug($slug)
     {
         $slug = strtolower(trim((string) $slug, "/ \t\n\r\0"));
         return $slug === '' ? '' : ($this->_safeSegment($slug) === '' ? '' : $slug);
     }
 
-    /** A single path segment sanitized to a safe token, or '' if it isn't one. */
     protected function _safeSegment($seg)
     {
         $seg = (string) $seg;
@@ -528,7 +629,6 @@ class Docs_Model_Docs
         return preg_match('/^[a-z0-9][a-z0-9._-]*$/', $seg) ? $seg : '';
     }
 
-    /** A human title for a file doc: the first markdown H1, else the humanized slug. */
     protected function _fileTitle($body, $format, $slug)
     {
         if ($format === Tiger_Model_Page::FORMAT_MARKDOWN
@@ -538,7 +638,6 @@ class Docs_Model_Docs
         return $this->_humanize($slug);
     }
 
-    /** True only when every word appears somewhere in the haystack (AND match). */
     protected function _allWords($hay, array $words)
     {
         if (!$words) {
@@ -552,7 +651,6 @@ class Docs_Model_Docs
         return true;
     }
 
-    /** A ~160-char excerpt centered on the first phrase/word hit, ellipsized at the cut ends. */
     protected function _snippet($text, array $words, $full)
     {
         $text = trim(preg_replace('/\s+/', ' ', (string) $text));
@@ -579,11 +677,10 @@ class Docs_Model_Docs
         return $snip;
     }
 
-    /** Strip markup (markdown syntax + any HTML incl. comments) down to plain, searchable text. */
     protected function _plain($body, $format)
     {
         $s = (string) $body;
-        $s = preg_replace('/<!--.*?-->/s', ' ', $s);                // HTML comments (incl. tiger:doc)
+        $s = preg_replace('/<!--.*?-->/s', ' ', $s);
         if ($format === Tiger_Model_Page::FORMAT_MARKDOWN) {
             $s = preg_replace('/```.*?```/s', ' ', $s);
             $s = preg_replace('/`[^`]*`/', ' ', $s);
@@ -597,5 +694,28 @@ class Docs_Model_Docs
         $s = strip_tags($s);
         $s = html_entity_decode($s, ENT_QUOTES, 'UTF-8');
         return trim(preg_replace('/\s+/', ' ', $s));
+    }
+
+    /** Config getter (tiger.docs.* → docs.*), tolerant of a missing registry. */
+    protected function _cfgBool($path, $default)
+    {
+        try {
+            $cfg = Zend_Registry::get('Zend_Config');
+        } catch (Throwable $e) {
+            return $default;
+        }
+        foreach (['tiger.docs.' . $path, 'docs.' . $path] as $full) {
+            $node = $cfg;
+            foreach (explode('.', $full) as $k) {
+                $node = is_object($node) ? ($node->{$k} ?? null) : null;
+                if ($node === null) {
+                    break;
+                }
+            }
+            if ($node !== null && !$node instanceof Zend_Config) {
+                return in_array(strtolower((string) $node), ['1', 'true', 'yes', 'on'], true);
+            }
+        }
+        return $default;
     }
 }

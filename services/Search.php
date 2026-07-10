@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
 /**
- * Docs_Service_Search — /api search for the public docs (powers the ⌘K launcher).
+ * Docs_Service_Search — /api search for the docs (powers the ⌘K launcher on both surfaces).
  *
- * Public (guest-allowed, read-only — like Tiger_Service_Location): the docs are public, so
- * search over them is too. Searches every collection's file docs in the caller's request locale
- * (Docs_Model_Docs::search); returns ranked hits with a ready-to-use `url` (collection-aware:
- * Guide is prefix-less, other collections are namespaced under the docs base).
+ * `scope=public` (default) searches PUBLIC docs and is guest-allowed (the docs are public).
+ * `scope=admin` searches ADMIN docs (the in-app help center) and is admin-only. Each hit gets a
+ * ready-to-use, surface-correct `url`.
  *
- * Called as { module:'docs', service:'search', method:'query', q:'…' }.
+ * Called as { module:'docs', service:'search', method:'query', q:'…', scope:'public'|'admin' }.
  */
 class Docs_Service_Search extends Tiger_Service_Service
 {
@@ -17,16 +16,27 @@ class Docs_Service_Search extends Tiger_Service_Service
     {
         $q      = isset($params['q']) ? (string) $params['q'] : '';
         $locale = defined('LANG') ? LANG : 'en';
+        $scope  = (($params['scope'] ?? '') === Docs_Model_Docs::VIS_ADMIN)
+            ? Docs_Model_Docs::VIS_ADMIN : Docs_Model_Docs::VIS_PUBLIC;
+
+        if ($scope === Docs_Model_Docs::VIS_ADMIN && !$this->_isAdmin()) {
+            $this->_error('core.api.error.not_allowed');
+            return;
+        }
 
         try {
-            $base    = $this->_docsBase();
             $default = Docs_Model_Docs::DEFAULT_COLLECTION;
-            $results = (new Docs_Model_Docs())->search($q, $locale);
+            $base    = $this->_docsBase();
+            $results = (new Docs_Model_Docs())->search($q, $locale, $scope);
 
             foreach ($results as &$r) {
-                $col   = (string) ($r['collection'] ?? $default);
-                $prefix = $base . ($col === $default ? '' : '/' . $col);
-                $r['url'] = $prefix . '/' . $r['slug'];
+                $col = (string) ($r['collection'] ?? '');
+                if ($scope === Docs_Model_Docs::VIS_ADMIN) {
+                    $r['url'] = '/docs/admin/help/' . $col . '/' . $r['slug'];      // admin help, always namespaced
+                } else {
+                    $prefix   = $base . ($col === $default ? '' : '/' . $col);      // guide prefix-less
+                    $r['url'] = $prefix . '/' . $r['slug'];
+                }
             }
             unset($r);
 
@@ -36,7 +46,7 @@ class Docs_Service_Search extends Tiger_Service_Service
         }
     }
 
-    /** The docs' active public base (the effective route-override prefix), defaulting to /docs. */
+    /** The docs' active public base (route-override prefix), defaulting to /docs. */
     protected function _docsBase()
     {
         $o = Tiger_Routing_Overrides::get('docs');

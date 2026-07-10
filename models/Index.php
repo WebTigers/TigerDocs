@@ -30,13 +30,17 @@ class Docs_Model_Index
     /** callable(string $locale): array — the full scan, called only on a cache miss. */
     protected $_build;
 
+    /** callable(string $locale): string[] — the dirs to fingerprint (default: the content dir). */
+    protected $_roots;
+
     /** Per-request memo, per locale (an FPM worker also skips the fingerprint walk within a request). */
     protected static $_memo = [];
 
-    public function __construct($contentDir, callable $build)
+    public function __construct($contentDir, callable $build, callable $roots = null)
     {
         $this->_contentDir = $contentDir;
         $this->_build      = $build;
+        $this->_roots      = $roots;
     }
 
     /**
@@ -115,8 +119,12 @@ class Docs_Model_Index
      */
     protected function _fingerprint($locale)
     {
+        $roots = $this->_roots
+            ? array_unique((array) ($this->_roots)($locale))
+            : array_unique([$this->_contentDir . '/' . $locale, $this->_contentDir . '/en']);
+
         $parts = [];
-        foreach (array_unique([$this->_contentDir . '/' . $locale, $this->_contentDir . '/en']) as $root) {
+        foreach ($roots as $root) {
             if (!is_dir($root)) {
                 continue;
             }
@@ -126,7 +134,8 @@ class Docs_Model_Index
                 );
                 foreach ($it as $f) {
                     if ($f->isFile()) {
-                        $parts[] = substr($f->getPathname(), strlen($this->_contentDir)) . '|' . $f->getMTime() . '|' . $f->getSize();
+                        // Absolute path (the cache is per-server) | mtime | size — add/remove/edit flips it.
+                        $parts[] = $f->getPathname() . '|' . $f->getMTime() . '|' . $f->getSize();
                     }
                 }
             } catch (Throwable $e) {

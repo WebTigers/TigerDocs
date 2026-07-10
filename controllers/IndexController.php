@@ -48,23 +48,25 @@ class Docs_IndexController extends Tiger_Controller_Action
         $base   = $this->_base();
         $raw    = trim((string) $this->getParam('slug', ''), '/');
 
-        // Split the leading segment: if it names a collection, it's <collection>/<rest>, else guide.
+        // Public surface → only PUBLIC-visibility docs. Split the leading segment: if it names a
+        // (public) collection, it's <collection>/<rest>, else the default (guide).
+        $vis        = Docs_Model_Docs::VIS_PUBLIC;
         $collection = Docs_Model_Docs::DEFAULT_COLLECTION;
         $docSlug    = $raw;
         if ($raw !== '') {
             $seg = explode('/', $raw, 2);
-            if (in_array($seg[0], $this->_docs->collectionSlugs($locale), true)) {
+            if (in_array($seg[0], $this->_docs->collectionSlugs($locale, $vis), true)) {
                 $collection = $seg[0];
                 $docSlug    = $seg[1] ?? '';
             }
         }
 
-        $this->view->collections = $this->_docs->collections($locale);   // the dropdown
-        $this->view->collection  = $collection;                          // the active one
-        $this->view->tree        = $this->_docs->tree($locale, $collection, $base);
+        $this->view->collections = $this->_docs->collections($locale, $vis);   // the dropdown
+        $this->view->collection  = $collection;                                // the active one
+        $this->view->tree        = $this->_docs->tree($locale, $collection, $base, $vis, Docs_Model_Docs::DEFAULT_COLLECTION);
         $this->view->docsBase    = $base;
 
-        $doc = $this->_docs->resolve($docSlug, $locale, '', $collection);
+        $doc = $this->_docs->resolve($docSlug, $locale, '', $collection, $vis);
 
         if ($docSlug === '') {
             // Collection landing — its _index (may be null → the view shows a generic header).
