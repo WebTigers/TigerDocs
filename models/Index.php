@@ -199,9 +199,15 @@ class Docs_Model_Index
     }
 
     /**
-     * Writable per-server cache dir: config override → a predictable app `var/cache` (when the app
-     * root is writable — persistent, inspectable, survives an fpm restart) → system temp (always
-     * writable; the right fallback for read-only / containerized deploys — the cache just rebuilds).
+     * Writable per-server cache dir — always INSIDE the app root (the user's own account). Tiger
+     * targets shared cPanel hosting: you have NO access outside the home folder, and no dependable
+     * system tmp (a shared `/tmp` may be volatile, per-request, isolated by the SAPI — e.g. php-fpm
+     * `PrivateTmp` — or outside `open_basedir`). So we NEVER fall back to `sys_get_temp_dir()`: a
+     * cache there can't be cleared by a deploy and silently goes stale. The cache lives at the app's
+     * `var/cache`, a known, user-writable, deploy-clearable path. If that isn't writable, `_store()`
+     * no-ops and the index just rebuilds each request — the cache is skipped, correctness intact.
+     *
+     * Override the location (or point several apps at one dir) with `tiger.docs.cache.dir`.
      */
     protected function _cacheDir()
     {
@@ -209,13 +215,11 @@ class Docs_Model_Index
         if ($dir !== '') {
             return rtrim($dir, '/');
         }
-        if (defined('APPLICATION_PATH')) {
-            $base = dirname(APPLICATION_PATH);
-            if (is_dir($base . '/var/cache') || is_writable($base) || is_writable($base . '/var')) {
-                return $base . '/var/cache/tiger-docs';
-            }
-        }
-        return sys_get_temp_dir() . '/tiger-docs-' . substr(md5($this->_contentDir), 0, 8);
+        // App root = the account's folder on shared hosting; var/ is Tiger's standard writable area.
+        $base = defined('APPLICATION_PATH')
+            ? dirname(APPLICATION_PATH)
+            : rtrim($this->_contentDir, '/') . '/..';
+        return $base . '/var/cache/tiger-docs';
     }
 
     // ---- Config (tiger.docs.* → docs.*), tolerant of a missing registry ------------------------
