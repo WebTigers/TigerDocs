@@ -107,6 +107,57 @@ class Docs_Reference_Generator
         return $count;
     }
 
+    /**
+     * Rebuild ALL reference for an app instance into <appRoot>/var/docs-generated/<locale>/ — the
+     * platform (Tiger_*) `reference` collection plus a Reference section for every app module. This
+     * is the whole build hook; the CLI (bin/build-reference.php) and the admin button both call it.
+     * Returns ['locale','dir','targets'=>[name=>count],'total'].
+     */
+    public function buildAll($appRoot, $locale = 'en')
+    {
+        $appRoot = rtrim((string) $appRoot, '/');
+        $gen     = $appRoot . '/var/docs-generated/' . $locale;
+
+        $this->_rrmdir($gen);                 // clean rebuild — pure artifact, no stale pages
+        @mkdir($gen, 0775, true);
+
+        $out = ['locale' => $locale, 'dir' => $gen, 'targets' => [], 'total' => 0];
+
+        // Platform (Tiger_*), when tiger-core is vendored in this app.
+        $lib = $appRoot . '/vendor/webtigers/tiger-core/library/Tiger';
+        if (is_dir($lib)) {
+            $n = $this->buildPlatform($lib, $gen . '/reference', ['locale' => $locale, 'title' => 'Reference']);
+            $out['targets']['platform'] = $n;
+            $out['total'] += $n;
+        }
+
+        // Each app module with @api classes → its own generated Reference section.
+        foreach ((glob($appRoot . '/application/modules/*', GLOB_ONLYDIR) ?: []) as $moduleDir) {
+            $slug = basename($moduleDir);
+            $n    = $this->buildModule($moduleDir, ['out' => $gen . '/' . $slug, 'locale' => $locale]);
+            if ($n > 0) {
+                $out['targets'][$slug] = $n;
+                $out['total'] += $n;
+            } else {
+                @rmdir($gen . '/' . $slug);
+            }
+        }
+
+        return $out;
+    }
+
+    /** Recursively remove a directory (best-effort). */
+    protected function _rrmdir($dir)
+    {
+        if (!is_dir($dir)) { return; }
+        foreach (scandir($dir) ?: [] as $f) {
+            if ($f === '.' || $f === '..') { continue; }
+            $p = $dir . '/' . $f;
+            is_dir($p) ? $this->_rrmdir($p) : @unlink($p);
+        }
+        @rmdir($dir);
+    }
+
     // =================================================================================== parsing
 
     /** Only document classes explicitly marked @api (and not @internal). */

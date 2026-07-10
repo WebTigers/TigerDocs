@@ -70,6 +70,18 @@ $pattern = (string) $el('route_pattern')->getValue() ?: 'docs';
     </div>
 </div>
 
+<div class="row g-4 mt-1">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="fa-solid fa-code me-2"></i>API reference</div>
+            <div class="card-body">
+                <p class="text-body-secondary mb-3">Generate browsable API reference from the code's own docblocks — the platform (<code>Tiger_*</code>) plus every installed module — into this server's <code>var/docs-generated</code>. It's a <strong>build artifact</strong> (never committed, rebuilt from code), so run it after updating the platform or a module. It then appears under the <strong>Reference</strong> dropdown and each module's own docs.</p>
+                <button type="button" id="docs-reference-build" class="btn btn-outline-secondary"><i class="fa-solid fa-wand-magic-sparkles me-2"></i>Build reference</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('docs-settings-form');
@@ -115,6 +127,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (msgs.length) { msgs.forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); }); }
                     else if (res && res.result === 1) { TigerDOM.notify(fb, 'Index rebuilt.', { type: 'success' }); }
                     else { TigerDOM.notify(fb, 'Rebuild failed.', { type: 'error' }); }
+                })
+                .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
+        });
+    }
+
+    // Build this server's generated API reference (docblocks → tiger:doc pages).
+    var refBuild = document.getElementById('docs-reference-build');
+    if (refBuild) {
+        refBuild.addEventListener('click', function () {
+            var rd = new URLSearchParams();
+            rd.set('module', 'docs'); rd.set('service', 'settings'); rd.set('method', 'buildReference');
+            TigerButton.run(this, function () {
+                return fetch('/api', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: rd })
+                    .then(function (r) { return r.json().catch(function () { return {}; }); });
+            })
+                .then(function (res) {
+                    var msgs = (res && res.messages) || [];
+                    if (msgs.length) { msgs.forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); }); }
+                    else if (res && res.result === 1) { TigerDOM.notify(fb, 'Reference generated.', { type: 'success' }); }
+                    else { TigerDOM.notify(fb, 'Build failed.', { type: 'error' }); }
                 })
                 .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
         });

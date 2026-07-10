@@ -12,6 +12,7 @@ return [
     'docs.notfound'       => 'That document could not be found.',
     'docs.settings.saved' => 'Docs settings saved.',
     'docs.index.rebuilt'  => 'Docs index rebuilt on this server.',
+    'docs.reference.built' => 'API reference generated on this server.',
 
     // Landing chrome (localized so the docs home follows the language switch).
     'docs.landing.eyebrow' => 'Documentation',

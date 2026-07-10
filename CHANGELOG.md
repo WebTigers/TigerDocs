@@ -4,6 +4,16 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [0.4.0-beta] — 2026-07-10
+
+### Added
+- **"Build reference" button in the admin** (Docs → Settings). Regenerates this server's API
+  reference (docblocks → `tiger:doc` pages) into `var/docs-generated` and refreshes the index — the
+  admin-panel equivalent of the `bin/build-reference.php` deploy hook. Admin-gated, per-server, via
+  `Docs_Service_Settings::buildReference`.
+- **`Docs_Reference_Generator::buildAll($appRoot, $locale)`** — the shared build orchestration
+  (platform `Tiger_*` + every app module), now called by *both* the CLI hook and the admin button.
+
 ## [0.3.0-beta] — 2026-07-10
 
 Generated reference becomes a **build artifact**, never committed.

@@ -62,4 +62,31 @@ class Docs_Service_Settings extends Tiger_Service_Service
             $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
         }
     }
+
+    /**
+     * Rebuild this server's generated API reference (docblocks → tiger:doc pages) into
+     * var/docs-generated — the platform `reference` collection + a Reference section per module —
+     * then refresh the index so it shows. Same work as the bin/build-reference.php deploy hook, as
+     * an admin button. Per-server, like the index rebuild; generated docs are never committed.
+     *
+     * @param  array $params the request payload (unused)
+     * @return void          responds via _success/_error with the page + per-target counts
+     */
+    public function buildReference(array $params): void
+    {
+        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+
+        try {
+            require_once dirname(__DIR__) . '/bin/reference.php';   // defines Docs_Reference_Generator
+            $locale  = defined('LANG') ? LANG : 'en';
+            $appRoot = defined('APPLICATION_PATH') ? dirname(APPLICATION_PATH) : dirname(__DIR__, 4);
+
+            $res = (new Docs_Reference_Generator())->buildAll($appRoot, $locale);
+            (new Docs_Model_Docs())->rebuildIndex($locale);         // pick the new pages up now
+
+            $this->_success(['pages' => (int) $res['total'], 'targets' => $res['targets']], 'docs.reference.built');
+        } catch (Throwable $e) {
+            $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
+        }
+    }
 }
