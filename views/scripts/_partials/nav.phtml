@@ -2,33 +2,69 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
 /**
- * Docs sidebar — the "Documentation" home link + the section/link tree. Shared by the
- * landing (index) and each doc (view); the current doc's link gets the active state.
- * Expects: $this->tree (sections), $this->docSlug (active slug, '' on the landing).
+ * Docs sidebar — the collection switcher (dropdown) + a RECURSIVE nav tree (arbitrary depth) +
+ * a client-side filter. Everything is data-driven from the scan-based engine; there's no manifest.
+ * Expects: $this->collections, $this->collection (active slug), $this->tree (nested nodes),
+ *          $this->docSlug (active page id), $this->docsBase.
  */
-$tree   = $this->tree ?: [];
-$active = (string) ($this->docSlug ?? '');
-$base   = (string) ($this->docsBase ?: '/docs');
+$collections = $this->collections ?: [];
+$collection  = (string) ($this->collection ?: 'guide');
+$tree        = $this->tree ?: [];
+$active      = (string) ($this->docSlug ?? '');
+$base        = (string) ($this->docsBase ?: '/docs');
+$esc         = fn($s) => $this->escape((string) $s);
+
+// Active collection's label + a helper to build a collection's landing URL.
+$curTitle = 'Documentation';
+foreach ($collections as $c) { if ($c['slug'] === $collection) { $curTitle = $c['title']; } }
+$colUrl   = fn($slug) => $base . ($slug === 'guide' ? '' : '/' . $slug);
+
+/** Render a list of nodes (and their children) recursively into a nested <ul>. */
+$render = function (array $nodes) use (&$render, $active, $esc) {
+    echo '<ul class="doc-nav-list list-unstyled mb-0">';
+    foreach ($nodes as $node) {
+        echo '<li class="doc-nav-item">';
+        if (!empty($node['header'])) {
+            echo '<div class="doc-nav-header text-uppercase small fw-semibold text-body-secondary mt-3 mb-1">' . $esc($node['title']) . '</div>';
+        } else {
+            $on = $active !== '' && $active === $node['id'];
+            echo '<a class="nav-link py-1 px-2 rounded ' . ($on ? 'active bg-primary-subtle text-primary-emphasis fw-semibold' : 'text-body-secondary') . '"'
+               . ' href="' . $esc($node['url']) . '">' . $esc($node['title']) . '</a>';
+        }
+        if (!empty($node['children'])) { $render($node['children']); }
+        echo '</li>';
+    }
+    echo '</ul>';
+};
 ?>
-<a href="<?= $this->escape($base) ?>" class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-2">
-    <i class="fa-solid fa-book me-2"></i><?= $this->translate('docs.title') ?>
+<?php if (count($collections) > 1): ?>
+<div class="dropdown mb-3" data-docs-collection>
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 d-flex align-items-center justify-content-between"
+            type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <span class="text-truncate"><i class="fa-solid fa-book me-2"></i><?= $esc($curTitle) ?></span>
+    </button>
+    <ul class="dropdown-menu w-100 shadow">
+        <?php foreach ($collections as $c): ?>
+        <li><a class="dropdown-item<?= $c['slug'] === $collection ? ' active' : '' ?>" href="<?= $esc($colUrl($c['slug'])) ?>"><?= $esc($c['title']) ?></a></li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+<?php else: ?>
+<a href="<?= $esc($colUrl($collection)) ?>" class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-3">
+    <i class="fa-solid fa-book me-2"></i><?= $esc($curTitle) ?>
 </a>
+<?php endif; ?>
+
 <div class="mb-3">
     <input type="search" class="form-control form-control-sm" data-docs-filter autocomplete="off"
-           placeholder="<?= $this->escape($this->translate('docs.filter')) ?>" aria-label="<?= $this->escape($this->translate('docs.filter')) ?>">
+           placeholder="<?= $esc($this->translate('docs.filter')) ?>" aria-label="<?= $esc($this->translate('docs.filter')) ?>">
 </div>
-<nav class="nav flex-column" data-docs-nav>
-    <?php foreach ($tree as $section): ?>
-    <div class="text-uppercase small fw-semibold text-body-secondary mt-3 mb-1" style="letter-spacing:.06em;">
-        <?= $this->escape($section['title']) ?>
-    </div>
-        <?php foreach ($section['items'] as $item): $on = $active === $item['slug']; ?>
-    <a class="nav-link py-1 px-2 rounded <?= $on ? 'active bg-primary-subtle text-primary-emphasis fw-semibold' : 'text-body-secondary' ?>"
-       href="<?= $this->escape($base) ?>/<?= $this->escape($item['slug']) ?>"><?= $this->escape($item['title']) ?></a>
-        <?php endforeach; ?>
-    <?php endforeach; ?>
+
+<nav data-docs-nav>
+    <?php $render($tree); ?>
     <div class="nav-link py-1 px-2 small text-body-secondary d-none" data-docs-filter-empty><em>No pages match.</em></div>
 </nav>
+
 <script>
 (function () {
     var box = document.querySelector('[data-docs-filter]'), nav = document.querySelector('[data-docs-nav]');
@@ -37,17 +73,19 @@ $base   = (string) ($this->docsBase ?: '/docs');
     var empty = nav.querySelector('[data-docs-filter-empty]');
     box.addEventListener('input', function () {
         var q = box.value.trim().toLowerCase(), shown = 0;
+        // Show/hide each page link by its own text.
         nav.querySelectorAll('.nav-link:not([data-docs-filter-empty])').forEach(function (a) {
             var hit = !q || a.textContent.toLowerCase().indexOf(q) !== -1;
             a.style.display = hit ? '' : 'none'; if (hit) { shown++; }
         });
-        nav.querySelectorAll(':scope > div:not([data-docs-filter-empty])').forEach(function (h) {
-            var any = false, n = h.nextElementSibling;
-            while (n && n.tagName !== 'DIV') {
-                if (n.classList.contains('nav-link') && n.style.display !== 'none') { any = true; }
-                n = n.nextElementSibling;
+        // Show a branch/header <li> only if it contains a visible matching link (nesting-aware).
+        nav.querySelectorAll('.doc-nav-item').forEach(function (li) {
+            if (!q) { li.style.display = ''; return; }
+            var links = li.querySelectorAll('.nav-link'), on = false;
+            for (var i = 0; i < links.length; i++) {
+                if (links[i].textContent.toLowerCase().indexOf(q) !== -1) { on = true; break; }
             }
-            h.style.display = (!q || any) ? '' : 'none';
+            li.style.display = on ? '' : 'none';
         });
         if (empty) { empty.classList.toggle('d-none', !(q && shown === 0)); }
     });

@@ -33,23 +33,49 @@ class Docs_IndexController extends Tiger_Controller_Action
         $this->_forward('docs');
     }
 
-    /** The docs viewer: landing when there's no slug, otherwise one resolved doc (404 on miss). */
+    /**
+     * The docs viewer. The route hands us the path after /docs as `slug`; its leading segment
+     * selects the COLLECTION (Guide is default + prefix-less, others are namespaced):
+     *   /docs                     → guide landing (_index)
+     *   /docs/first-module        → guide/first-module
+     *   /docs/admin               → admin landing
+     *   /docs/admin/pages         → admin/pages
+     * An empty doc slug renders the collection's landing; otherwise one resolved doc (404 on miss).
+     */
     public function docsAction()
     {
         $locale = $this->_locale();
-        $slug   = (string) $this->getParam('slug', '');
-        $this->view->tree     = $this->_docs->tree($locale);
-        $this->view->docsBase = $this->_base();   // active public prefix, so links follow the override
+        $base   = $this->_base();
+        $raw    = trim((string) $this->getParam('slug', ''), '/');
 
-        if ($slug === '') {
-            $this->view->title   = 'Documentation';
+        // Split the leading segment: if it names a collection, it's <collection>/<rest>, else guide.
+        $collection = Docs_Model_Docs::DEFAULT_COLLECTION;
+        $docSlug    = $raw;
+        if ($raw !== '') {
+            $seg = explode('/', $raw, 2);
+            if (in_array($seg[0], $this->_docs->collectionSlugs($locale), true)) {
+                $collection = $seg[0];
+                $docSlug    = $seg[1] ?? '';
+            }
+        }
+
+        $this->view->collections = $this->_docs->collections($locale);   // the dropdown
+        $this->view->collection  = $collection;                          // the active one
+        $this->view->tree        = $this->_docs->tree($locale, $collection, $base);
+        $this->view->docsBase    = $base;
+
+        $doc = $this->_docs->resolve($docSlug, $locale, '', $collection);
+
+        if ($docSlug === '') {
+            // Collection landing — its _index (may be null → the view shows a generic header).
+            $this->view->title   = ($doc['title'] ?? 'Documentation') . ' — Documentation';
+            $this->view->doc     = $doc;
             $this->view->docSlug = '';
             $this->_helper->viewRenderer->setNoRender(true);
             $this->renderScript('index/index.phtml');
             return;
         }
 
-        $doc = $this->_docs->resolve($slug, $locale);
         if (!$doc) {
             throw new Zend_Controller_Action_Exception('Doc not found', 404);
         }

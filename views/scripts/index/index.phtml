@@ -2,45 +2,66 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
 /**
- * Docs landing: sticky sidebar + a welcome and one card per section (linking each doc).
- * Renders inside the theme's public layout — a theme can override this view. Expects
- * $this->tree (sections from the content manifest).
+ * Collection landing: sticky sidebar + the collection's _index body + an auto card-grid built
+ * from the (recursive) nav tree. Zero manifest — everything comes from the scan. Expects
+ * $this->doc (the _index, may be null), $this->tree, $this->collections, $this->collection.
  */
-$tree = $this->tree ?: [];
-$base = (string) ($this->docsBase ?: '/docs');
+$doc         = $this->doc ?? null;
+$tree        = $this->tree ?: [];
+$collections = $this->collections ?: [];
+$collection  = (string) ($this->collection ?: 'guide');
+$base        = (string) ($this->docsBase ?: '/docs');
+$assets      = '/_modules/docs';
+
+/** Flatten a node's descendant PAGE nodes (skip header labels) — for the landing cards. */
+$pages = function ($node) use (&$pages) {
+    $out = [];
+    foreach (($node['children'] ?? []) as $c) {
+        if (empty($c['header'])) { $out[] = $c; }
+        $out = array_merge($out, $pages($c));
+    }
+    return $out;
+};
 ?>
 <?= $this->render('_partials/search.phtml') ?>
+<link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/vendor/highlight/docs.hljs.css')) ?>">
 <div class="container py-4" style="max-width:1160px;">
     <div class="row g-4">
         <aside class="col-lg-3 col-md-4">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
-                <?= $this->partial('_partials/nav.phtml', ['tree' => $tree, 'docSlug' => '', 'docsBase' => $base]) ?>
+                <?= $this->partial('_partials/nav.phtml', ['collections' => $collections, 'collection' => $collection, 'tree' => $tree, 'docSlug' => '', 'docsBase' => $base]) ?>
             </div>
         </aside>
 
         <main class="col-lg-9 col-md-8">
+            <?php if ($doc && !empty($doc['html'])): ?>
+            <article class="tiger-docs-body mb-4"><?= $doc['html'] ?></article>
+            <?php else: ?>
             <header class="mb-4">
-                <div class="small text-uppercase text-body-secondary mb-1" style="letter-spacing:.09em;font-weight:600;"><?= $this->translate('docs.landing.eyebrow') ?></div>
                 <h1 class="display-6 fw-bold mb-2"><?= $this->translate('docs.landing.heading') ?></h1>
                 <p class="lead text-body-secondary mb-0"><?= $this->translate('docs.landing.lead') ?></p>
             </header>
+            <?php endif; ?>
 
             <?php if (!$tree): ?>
             <div class="card"><div class="card-body text-body-secondary">
-                <i class="fa-regular fa-file-lines me-2"></i>No docs yet — add a file under
-                <code>content/en/</code> and list it in <code>content/manifest.json</code>.
+                <i class="fa-regular fa-file-lines me-2"></i>No pages yet — drop a <code>.md</code> file into
+                <code>content/en/<?= $this->escape($collection) ?>/</code>.
             </div></div>
             <?php else: ?>
             <div class="row g-3">
-                <?php foreach ($tree as $section): ?>
+                <?php foreach ($tree as $node):
+                    $items = empty($node['header']) ? array_merge([$node], $pages($node)) : $pages($node);
+                    if (!$items) { continue; }
+                ?>
                 <div class="col-sm-6">
                     <div class="card h-100"><div class="card-body">
-                        <h2 class="h6 fw-bold mb-3"><?= $this->escape($section['title']) ?></h2>
+                        <h2 class="h6 fw-bold mb-3"><?= $this->escape($node['title']) ?></h2>
                         <ul class="list-unstyled mb-0 d-grid gap-2">
-                            <?php foreach ($section['items'] as $item): ?>
+                            <?php foreach ($items as $it): ?>
                             <li>
-                                <a class="text-decoration-none" href="<?= $this->escape($base) ?>/<?= $this->escape($item['slug']) ?>">
-                                    <i class="fa-regular fa-file-lines me-2 text-body-secondary"></i><?= $this->escape($item['title']) ?>
+                                <a class="text-decoration-none" href="<?= $this->escape($it['url']) ?>">
+                                    <i class="fa-regular fa-file-lines me-2 text-body-secondary"></i><?= $this->escape($it['title']) ?>
                                 </a>
                             </li>
                             <?php endforeach; ?>
@@ -53,3 +74,8 @@ $base = (string) ($this->docsBase ?: '/docs');
         </main>
     </div>
 </div>
+
+<!-- Highlight any code in the _index landing body (same setup as the doc view). -->
+<script src="<?= $this->escape($this->asset($assets . '/vendor/highlight/highlight.min.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/vendor/highlight/php-template.min.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/docs.highlight.js')) ?>" defer></script>

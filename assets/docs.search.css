@@ -62,6 +62,11 @@
     .docs-toc-marker { transition: opacity .2s ease; }
 }
 
+/* Recursive sidebar nav — nested lists indent under their parent with a subtle rail. */
+.doc-nav-list { list-style: none; padding-left: 0; margin-bottom: 0; }
+.doc-nav-list .doc-nav-list { padding-left: .6rem; margin-left: .35rem; border-left: 1px solid var(--bs-border-color); }
+.doc-nav-header { letter-spacing: .06em; }
+
 /* Highlighted code blocks: give the hljs code a card border + radius (hljs owns the padding/bg). */
 .tiger-docs-body pre code.hljs {
     border: 1px solid var(--bs-border-color);

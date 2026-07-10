@@ -31,7 +31,7 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
     <div class="row g-4">
         <aside class="col-lg-3 col-md-4">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
-                <?= $this->partial('_partials/nav.phtml', ['tree' => $this->tree, 'docSlug' => $this->docSlug, 'docsBase' => $this->docsBase]) ?>
+                <?= $this->partial('_partials/nav.phtml', ['collections' => $this->collections, 'collection' => $this->collection, 'tree' => $this->tree, 'docSlug' => $this->docSlug, 'docsBase' => $this->docsBase]) ?>
             </div>
         </aside>
 

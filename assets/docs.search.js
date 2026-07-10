@@ -69,7 +69,7 @@
         empty.classList.add('d-none');
         items.forEach(function (it, i) {
             var a = document.createElement('a');
-            a.href = base + '/' + it.slug;
+            a.href = it.url || (base + '/' + it.slug);   // server sends a collection-aware url
             a.className = 'docs-search-item d-block text-decoration-none rounded px-3 py-2';
             a.innerHTML =
                 '<div class="d-flex align-items-center gap-2">'
