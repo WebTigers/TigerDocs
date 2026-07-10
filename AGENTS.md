@@ -95,17 +95,27 @@ and a few `visibility: admin` pages for whoever configures it.
 
 ## Reference generator <a id="reference-generator"></a>
 
-You **don't hand-write API reference** — you generate it from source. `bin/reference.php` is a
-**token-based** reader (no app boot, no autoload) that turns docblocks + signatures into
-`tiger:doc` pages, which then flow through the normal scan/cache/nav/search. Reference *is* docs.
+You **don't hand-write API reference, and you don't commit it** — it's a **build artifact**,
+regenerated on the instance from source at every deploy. `bin/reference.php` is a **token-based**
+reader (no app boot, no autoload) that turns docblocks + signatures into `tiger:doc` pages; those
+land in a **gitignored** area (`<app>/var/docs-generated/<locale>/`) that the engine scans as an
+extra source — merging a **Reference** section into a module's own collection, or standing up the
+platform `reference` collection. Reference *is* docs, but generated docs live only on the instance.
+
+**The build hook** — run it after a deploy / module install (it rebuilds *everything*):
 
 ```bash
-# Ship reference INTO a module (writes a "Reference" section into <module>/docs/en/):
-php application/modules/docs/bin/reference.php application/modules/billing
+php application/modules/docs/bin/build-reference.php   # → <app>/var/docs-generated/en/
+#   platform (Tiger_*)  → var/docs-generated/en/reference/   (the "Reference" collection)
+#   each app module     → var/docs-generated/en/<slug>/       (a Reference section in its docs)
+```
 
-# Platform reference — every Tiger_* @api class, sectioned by namespace:
-php application/modules/docs/bin/reference.php \
-    --platform=vendor/webtigers/tiger-core/library/Tiger --out=path/to/content/en/reference
+Then warm the index (`curl /docs`, or the admin **Rebuild index**). Under the hood the hook calls
+the single-target generator, which you can also run directly while developing a module:
+
+```bash
+php application/modules/docs/bin/reference.php <module-dir> --out=<app>/var/docs-generated/en/<slug>
+php application/modules/docs/bin/reference.php --platform=<tiger-lib> --out=<app>/var/docs-generated/en/reference
 ```
 
 - Documents **only `@api` classes** and **only public methods** (`_`-prefixed + non-public are
@@ -113,11 +123,10 @@ php application/modules/docs/bin/reference.php \
 - Summaries, `@param`, `@return`, `@throws` come **straight from the docblocks** — which is why
   the [docblock contract](https://github.com/WebTigers/tiger-core/blob/main/AGENTS.md) matters.
   A well-kept docblock is a good reference page; a bad one is a bad page.
-- **Idempotent** — generated files carry `generated: reference` in their `tiger:doc` block; a
-  rebuild removes the old generated set first and never touches hand-written pages. Commit the
-  generated pages; they ship with the module.
-
-Options: `--out=DIR`, `--locale=en`, `--section=Name`, `--order=900`.
+- **Never commit the output** — not to the module repo, not to the content repo. It carries
+  `generated: reference` in its `tiger:doc` block, targets the gitignored `var/docs-generated/`,
+  and is rebuilt from code each deploy (so it can't rot). Hand-written pages always win a same-id
+  collision. Building docs *on the instance* is the sanctioned path; committing generated files is not.
 
 ## The DB override tier <a id="db-override"></a>
 

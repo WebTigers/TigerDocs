@@ -58,14 +58,9 @@ class Docs_Reference_Generator
             $o += 10;
         }
 
-        // If the module has no _index yet, drop a minimal one so the collection appears (not marked
-        // generated → preserved across rebuilds, editable).
-        if (!is_file($outDir . '/_index.md')) {
-            $title = ucfirst(basename($moduleDir));
-            $this->_write($outDir, '_index.md', $this->_block(['title' => $title, 'order' => '100'])
-                . "# {$title}\n\nDocumentation for the {$title} module.\n");
-        }
-
+        // NB: no _index is emitted. Generated output stays pure (only the section header + class
+        // pages) so it can MERGE into a module's hand-written collection — the collection's label
+        // comes from the module's own _index, not from generated files.
         return count($classes);
     }
 
@@ -87,6 +82,13 @@ class Docs_Reference_Generator
 
         if (!is_dir($outDir)) { @mkdir($outDir, 0775, true); }
         $this->_cleanGenerated($outDir);
+
+        // A generated _index so the `reference` collection has a landing even with no hand-written
+        // one; a hand-written content/_index (higher priority) transparently wins when present.
+        $this->_write($outDir, '_index.md', $this->_block([
+            'title' => $opts['title'] ?? 'Reference', 'order' => (string) ($opts['order'] ?? '80'),
+            'generated' => self::MARK,
+        ]) . "# " . ($opts['title'] ?? 'Reference') . "\n\nAPI reference, generated from source docblocks.\n");
 
         $count = 0; $sectionOrder = 10;
         foreach ($groups as $group => $classes) {

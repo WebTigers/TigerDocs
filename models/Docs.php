@@ -4,13 +4,17 @@
 /**
  * Docs_Model_Docs — the zero-config, multi-source documentation engine.
  *
- * There is NO manifest. A COLLECTION is just "a directory of doc files" (+ an `_index.md`), and
- * those directories come from two kinds of source, aggregated automatically:
+ * There is NO manifest. A COLLECTION is just "a directory of doc files" (+ an `_index.md`), and a
+ * collection can draw from MORE THAN ONE directory — aggregated automatically from three sources:
  *
  *   1. PLATFORM content — each subfolder of the module's content/<locale>/ dir (Guide, CMS, …).
  *   2. MODULE docs — each ACTIVE module that ships a `<module>/docs/<locale>/` folder becomes its
  *      own collection (slug = module name). Self-documenting modules: drop a docs/ folder and it
  *      appears; deactivate the module and it's gone. (Toggle with `docs.modules.scan`.)
+ *   3. GENERATED reference — `var/docs-generated/<locale>/<slug>/`, produced on the instance by
+ *      bin/build-reference.php (docblocks → tiger:doc pages). A per-instance BUILD ARTIFACT, never
+ *      committed. It merges INTO a matching collection (adding a "Reference" section to a module's
+ *      docs) or stands up its own (the platform `reference` collection). Hand-written pages win.
  *
  * Every file self-describes in a leading HTML comment (invisible when rendered):
  *
@@ -96,9 +100,11 @@ class Docs_Model_Docs
     // =====================================================================================
 
     /**
-     * All collection sources for a locale, keyed by slug:
-     *   [slug => ['slug','dir','enDir','defaultVis','source' => 'platform'|'module']]
-     * Platform subfolders first (they win a slug collision), then active-module docs/ dirs.
+     * All collection sources for a locale, keyed by slug. A collection can draw from MORE THAN ONE
+     * directory — hand-written dirs first (they win a same-id page), then a GENERATED dir appended:
+     *   [slug => ['slug','dirs'=>[…priority-ordered…],'defaultVis','source']]
+     * Precedence on a slug collision: platform content, then active-module docs/, then generated.
+     * Generated never overrides a hand-written page — it only ADDS (e.g. a "Reference" section).
      */
     protected function _sources($locale)
     {
@@ -107,50 +113,85 @@ class Docs_Model_Docs
             return self::$_sources[$locale];
         }
 
-        $out = [];
+        $gen   = $this->_generatedRoot();
+        $bases = [];   // slug => ['dirs' => [...hand-written, priority high→low...], 'source' => …]
 
         // 1) Platform collections — subfolders of content/en (canonical) ∪ content/<locale>.
-        $names = [];
-        foreach ([$this->_contentDir . '/en', $this->_contentDir . '/' . $locale] as $root) {
-            foreach ((glob($root . '/*', GLOB_ONLYDIR) ?: []) as $dir) {
-                $names[basename($dir)] = true;
+        foreach ($this->_subfolders([$this->_contentDir . '/en', $this->_contentDir . '/' . $locale]) as $slug) {
+            $bases[$slug] = [
+                'dirs'   => [$this->_contentDir . '/' . $locale . '/' . $slug, $this->_contentDir . '/en/' . $slug],
+                'source' => 'platform',
+            ];
+        }
+
+        // 2) Module collections — each active module that ships a docs/ folder (platform slug wins).
+        if ($this->_cfgBool('modules.scan', true)) {
+            foreach ($this->_moduleDocsRoots() as $slug => $docsRoot) {
+                if (isset($bases[$slug]) || $this->_safeSegment($slug) === '') {
+                    continue;
+                }
+                $bases[$slug] = ['dirs' => [$docsRoot . '/' . $locale, $docsRoot . '/en'], 'source' => 'module'];
             }
         }
-        foreach (array_keys($names) as $slug) {
+
+        // 3) Generated reference — append var/docs-generated/<locale|en>/<slug> to a matching
+        //    collection (adds a section), or stand up a generated-only collection (e.g. `reference`).
+        foreach ($this->_subfolders([$gen . '/en', $gen . '/' . $locale]) as $slug) {
+            $genDirs = [$gen . '/' . $locale . '/' . $slug, $gen . '/en/' . $slug];
+            if (isset($bases[$slug])) {
+                $bases[$slug]['dirs'] = array_merge($bases[$slug]['dirs'], $genDirs);
+            } else {
+                $bases[$slug] = ['dirs' => $genDirs, 'source' => 'generated'];
+            }
+        }
+
+        $out = [];
+        foreach ($bases as $slug => $b) {
             if ($this->_safeSegment($slug) === '') {
                 continue;
             }
-            $out[$slug] = $this->_descriptor(
-                $slug,
-                $this->_contentDir . '/' . $locale . '/' . $slug,
-                $this->_contentDir . '/en/' . $slug,
-                'platform'
-            );
-        }
-
-        // 2) Module collections — each active module that ships a docs/ folder.
-        if ($this->_cfgBool('modules.scan', true)) {
-            foreach ($this->_moduleDocsRoots() as $slug => $docsRoot) {
-                if (isset($out[$slug]) || $this->_safeSegment($slug) === '') {
-                    continue;   // platform collection wins a slug collision
-                }
-                $out[$slug] = $this->_descriptor($slug, $docsRoot . '/' . $locale, $docsRoot . '/en', 'module');
+            $d = $this->_descriptor($slug, $b['dirs'], $b['source']);
+            if (!empty($d['dirs'])) {
+                $out[$slug] = $d;   // drop collections whose dirs don't exist on disk
             }
         }
-
-        // Drop sources that resolve to no directory at all.
-        $out = array_filter($out, static fn($d) => $d['dir'] !== null || $d['enDir'] !== null);
 
         return self::$_sources[$locale] = $out;
     }
 
-    /** Build one source descriptor, resolving its locale + en dirs and default visibility. */
-    protected function _descriptor($slug, $localeDir, $enDir, $source)
+    /** Distinct, safe subfolder names across a set of parent dirs (a collection = a subfolder). */
+    protected function _subfolders(array $roots)
+    {
+        $names = [];
+        foreach ($roots as $root) {
+            foreach ((glob($root . '/*', GLOB_ONLYDIR) ?: []) as $dir) {
+                $name = basename($dir);
+                if ($this->_safeSegment($name) !== '') {
+                    $names[$name] = true;
+                }
+            }
+        }
+        return array_keys($names);
+    }
+
+    /**
+     * Where generated reference is written + read: an app-root, gitignored build area — NOT the
+     * committed module docs/ folder, and NOT content/ (which on an install is a symlink to the
+     * content deploy target, so a content deploy would wipe it). Generated docs are a per-instance
+     * BUILD ARTIFACT (rebuilt by bin/build-reference.php at deploy), never committed anywhere.
+     */
+    protected function _generatedRoot()
+    {
+        $base = defined('APPLICATION_PATH') ? dirname(APPLICATION_PATH) : dirname($this->_contentDir);
+        return $base . '/var/docs-generated';
+    }
+
+    /** Build one source descriptor from its priority-ordered dirs (existing only) + _index visibility. */
+    protected function _descriptor($slug, array $dirs, $source)
     {
         $d = [
             'slug'   => $slug,
-            'dir'    => is_dir($localeDir) ? $localeDir : null,
-            'enDir'  => is_dir($enDir) ? $enDir : null,
+            'dirs'   => array_values(array_filter($dirs, 'is_dir')),
             'source' => $source,
         ];
         $meta = $this->_indexMeta($d);
@@ -184,15 +225,13 @@ class Docs_Model_Docs
         return $out;
     }
 
-    /** The directories to fingerprint for a locale (all source dirs — platform + module). */
+    /** The directories to fingerprint for a locale (every source dir — platform + module + generated). */
     protected function _roots($locale)
     {
         $roots = [];
         foreach ($this->_sources($locale) as $d) {
-            foreach ([$d['dir'], $d['enDir']] as $dir) {
-                if ($dir !== null) {
-                    $roots[$dir] = true;
-                }
+            foreach ($d['dirs'] as $dir) {
+                $roots[$dir] = true;
             }
         }
         return array_keys($roots);
@@ -446,12 +485,12 @@ class Docs_Model_Docs
         return ['collections' => $collections, 'trees' => $trees, 'search' => $search];
     }
 
-    /** Scan a source's files → [id => ['id','title','header','order','parent','visibility']]. */
+    /** Scan a source's files (all its dirs) → [id => ['id','title','header','order','parent','visibility']]. */
     protected function _scanNodes(array $desc)
     {
-        $dir = $desc['dir'] ?: $desc['enDir'];
         $flat = [];
-        if ($dir) {
+        // Low→high priority so a higher-priority dir (hand-written) overwrites a generated same-id node.
+        foreach (array_reverse($desc['dirs']) as $dir) {
             foreach ((glob($dir . '/*.{md,markdown,html,htm,phtml}', GLOB_BRACE) ?: []) as $path) {
                 $id = preg_replace('/\.[^.]+$/', '', basename($path));
                 if ($id === '_index' || $this->_safeSegment($id) === '') {
@@ -581,13 +620,13 @@ class Docs_Model_Docs
         }
     }
 
-    /** Find a file within a source (locale dir then en dir), each extension. '_index' allowed. */
+    /** Find a file within a source (search its dirs in priority order), each extension. '_index' allowed. */
     protected function _findFileIn(array $desc, $name)
     {
         if ($name !== '_index' && $this->_safeSegment($name) === '') {
             return null;
         }
-        foreach (array_unique(array_filter([$desc['dir'], $desc['enDir']])) as $dir) {
+        foreach ($desc['dirs'] as $dir) {
             $real = realpath($dir);
             if (!$real) {
                 continue;

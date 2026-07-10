@@ -4,6 +4,32 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [0.3.0-beta] — 2026-07-10
+
+Generated reference becomes a **build artifact**, never committed.
+
+### Added
+- **A collection can draw from multiple directories.** `Docs_Model_Docs` now merges a collection
+  from hand-written *and* generated sources — hand-written pages always win a same-id collision.
+  This lets generated reference **add a "Reference" section** to a module's own docs collection
+  instead of replacing anything.
+- **Generated reference source** — the engine scans `<app>/var/docs-generated/<locale>/` (a
+  gitignored, per-instance build area) as an extra source: it merges into a matching collection or
+  stands up the platform `reference` collection.
+- **`bin/build-reference.php` — the deploy/install build hook.** Rebuilds *all* reference for the
+  instance in one shot: platform (`Tiger_*`) → the `reference` collection, and each app module →
+  a Reference section in its own docs. Token-based, no app boot; auto-derives the app root.
+
+### Changed
+- **Generated reference is no longer committed anywhere.** It targets `var/docs-generated/` (rebuilt
+  from code on every deploy, so it can't rot), not the module `docs/` folder and not the content
+  repo. The single-target generator (`bin/reference.php`) no longer emits an `_index` in module mode
+  (output stays pure so it can merge); platform mode emits a fallback `_index` a hand-written one wins.
+
+### Removed
+- The previously-committed generated reference pages from this module's `docs/en/` (the hand-written
+  `reference-generator.md` guide stays). They're now built on the instance by the hook.
+
 ## [0.2.1-beta] — 2026-07-10
 
 ### Fixed
