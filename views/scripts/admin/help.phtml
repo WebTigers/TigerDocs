@@ -1,0 +1,95 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * The admin HELP CENTER — admin-visibility docs (how to operate each installed module), rendered
+ * in the admin shell. Same engine + partials as the public /docs, scoped to visibility=admin.
+ * Expects $this->collections, $this->collection, $this->tree, $this->doc, $this->docSlug, $this->docsBase.
+ */
+$doc         = $this->doc ?? null;
+$tree        = $this->tree ?: [];
+$collections = $this->collections ?: [];
+$collection  = (string) ($this->collection ?: '');
+$base        = (string) ($this->docsBase ?: '/docs/admin/help');
+$headings    = $doc['headings'] ?? [];
+$assets      = '/_modules/docs';
+$ph          = 'Search help…';
+?>
+<link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/docs.search.css')) ?>">
+<link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/vendor/highlight/docs.hljs.css')) ?>">
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-1">Help</h1>
+        <p class="text-body-secondary mb-0">How to operate your installed modules — assembled from each module's own docs.</p>
+    </div>
+    <div class="text-nowrap">
+        <button type="button" data-docs-search-open class="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+            <i class="fa-solid fa-search"></i><span><?= $this->escape($ph) ?></span>
+        </button>
+    </div>
+</div>
+
+<?php if (!$collections): ?>
+<div class="card"><div class="card-body text-body-secondary">
+    <i class="fa-regular fa-circle-question me-2"></i>No module help yet. A module appears here when it ships admin docs — a
+    <code>docs/</code> folder with <code>visibility: admin</code> files. See
+    <a class="text-decoration-none" href="/docs/docs/writing-docs">Writing module docs</a>.
+</div></div>
+<?php else: ?>
+<div class="row g-4">
+    <aside class="col-lg-3">
+        <div class="sticky-top pt-1" style="top:5rem;z-index:1;">
+            <?= $this->partial('_partials/nav.phtml', ['collections' => $collections, 'collection' => $collection, 'tree' => $tree, 'docSlug' => $this->docSlug, 'docsBase' => $base, 'navDefault' => '']) ?>
+        </div>
+    </aside>
+
+    <main class="<?= $headings ? 'col-lg-6' : 'col-lg-9' ?>">
+        <?php if ($doc && !empty($doc['html'])): ?>
+        <article class="tiger-docs-body"><?= $doc['html'] ?></article>
+        <?php else: ?>
+        <div class="text-body-secondary"><i class="fa-regular fa-hand-point-left me-2"></i>Pick a topic from the left.</div>
+        <?php endif; ?>
+    </main>
+
+    <?php if ($headings): ?>
+    <aside class="col-lg-3 d-none d-lg-block">
+        <div class="sticky-top pt-1" style="top:5rem;z-index:1;">
+            <div class="small text-uppercase text-body-secondary mb-2 fw-semibold" style="letter-spacing:.06em;"><?= $this->translate('docs.onthispage') ?></div>
+            <nav class="docs-toc nav flex-column border-start ps-3 position-relative" id="docsToc">
+                <span class="docs-toc-marker" aria-hidden="true"></span>
+                <?php foreach ($headings as $h): ?>
+                <a class="nav-link py-1 px-0 small text-body-secondary<?= (int) $h['level'] === 3 ? ' ps-3' : '' ?>" data-toc-link href="#<?= $this->escape($h['id']) ?>"><?= $this->escape($h['text']) ?></a>
+                <?php endforeach; ?>
+            </nav>
+        </div>
+    </aside>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<!-- Admin-scoped ⌘K search modal (scope=admin → the search service returns admin docs + admin urls). -->
+<div class="modal fade" id="docsSearchModal" tabindex="-1" aria-hidden="true"
+     data-docs-base="<?= $this->escape($base) ?>" data-docs-scope="admin" aria-label="<?= $this->escape($ph) ?>">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <i class="fa-solid fa-search text-body-secondary me-2"></i>
+                <input type="search" class="form-control border-0 shadow-none" data-docs-search-input
+                       autocomplete="off" placeholder="<?= $this->escape($ph) ?>" aria-label="<?= $this->escape($ph) ?>">
+                <kbd class="ms-2">Esc</kbd>
+            </div>
+            <div class="modal-body py-2">
+                <div data-docs-search-results></div>
+                <div class="text-body-secondary small text-center py-4" data-docs-search-hint>Type to search the admin help.</div>
+                <div class="text-body-secondary small text-center py-4 d-none" data-docs-search-empty>No results. Try different words.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="<?= $this->escape($this->asset($assets . '/docs.search.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/docs.toc.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/vendor/highlight/highlight.min.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/vendor/highlight/php-template.min.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/docs.highlight.js')) ?>" defer></script>

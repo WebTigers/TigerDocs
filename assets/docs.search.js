@@ -16,6 +16,7 @@
     modalEl._wired = 1;
 
     var base    = modalEl.getAttribute('data-docs-base') || '/docs';
+    var scope   = modalEl.getAttribute('data-docs-scope') || 'public';   // 'public' | 'admin'
     var input   = modalEl.querySelector('[data-docs-search-input]');
     var results = modalEl.querySelector('[data-docs-search-results]');
     var hint    = modalEl.querySelector('[data-docs-search-hint]');
@@ -95,7 +96,7 @@
     function run(q) {
         var mine = ++seq;
         if (q.trim().length < 2) { items = []; render(q); return; }
-        var body = new URLSearchParams({ module: 'docs', service: 'search', method: 'query', q: q });
+        var body = new URLSearchParams({ module: 'docs', service: 'search', method: 'query', q: q, scope: scope });
         fetch('/api', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: body })
             .then(function (r) { return r.json(); })
             .then(function (res) {

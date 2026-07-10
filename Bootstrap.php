@@ -44,4 +44,46 @@ class Docs_Bootstrap extends Zend_Application_Module_Bootstrap
             'order'    => 60,
         ]);
     }
+
+    /**
+     * The in-admin HELP CENTER — the admin-visibility docs surface (how to operate each installed
+     * module), aggregated from every module's docs/ folder. A genuinely custom URL shape (a nested
+     * path under an admin action), so it's a real regex route, not a pretty-alias override:
+     * `/docs/admin/help(/collection/slug)` → Docs_AdminController::helpAction with the remainder as
+     * `docpath`. It doesn't shadow /docs/admin/settings (different prefix).
+     */
+    protected function _initAdminHelpRoute()
+    {
+        try {
+            Zend_Controller_Front::getInstance()->getRouter()->addRoute('docs_admin_help',
+                new Zend_Controller_Router_Route_Regex(
+                    'docs/admin/help(?:/(.+))?',
+                    ['module' => 'docs', 'controller' => 'admin', 'action' => 'help'],
+                    [1 => 'docpath'],
+                    'docs/admin/help/%s'
+                ));
+        } catch (Throwable $e) {
+            // Router not ready → skip; the canonical docs/admin/help path still dispatches.
+        }
+    }
+
+    /**
+     * Register a top-level "Help" item in the admin sidebar (via the Tiger_Admin_Nav registry —
+     * guarded so the module still works on a Core that predates it; the surface is reachable by URL
+     * regardless). ACL-gated to Docs_AdminController, so it hides for non-admins.
+     */
+    protected function _initAdminHelpNav()
+    {
+        if (class_exists('Tiger_Admin_Nav')) {
+            Tiger_Admin_Nav::register([
+                'key'      => 'docs_help',
+                'label'    => 'Help',
+                'icon'     => 'fa-circle-question',
+                'href'     => '/docs/admin/help',
+                'match'    => '/docs/admin/help',
+                'resource' => 'Docs_AdminController',
+                'order'    => 90,
+            ]);
+        }
+    }
 }

@@ -36,7 +36,7 @@ class Docs_Model_Index
     /** Per-request memo, per locale (an FPM worker also skips the fingerprint walk within a request). */
     protected static $_memo = [];
 
-    public function __construct($contentDir, callable $build, callable $roots = null)
+    public function __construct($contentDir, callable $build, ?callable $roots = null)
     {
         $this->_contentDir = $contentDir;
         $this->_build      = $build;

@@ -14,10 +14,12 @@ $active      = (string) ($this->docSlug ?? '');
 $base        = (string) ($this->docsBase ?: '/docs');
 $esc         = fn($s) => $this->escape((string) $s);
 
-// Active collection's label + a helper to build a collection's landing URL.
+// Active collection's label + a helper to build a collection's landing URL. `navDefault` is the
+// prefix-less collection ('guide' on the public surface, '' in the admin help center → all namespaced).
+$default  = ($this->navDefault !== null) ? (string) $this->navDefault : 'guide';
 $curTitle = 'Documentation';
 foreach ($collections as $c) { if ($c['slug'] === $collection) { $curTitle = $c['title']; } }
-$colUrl   = fn($slug) => $base . ($slug === 'guide' ? '' : '/' . $slug);
+$colUrl   = fn($slug) => $base . (($default !== '' && $slug === $default) ? '' : '/' . $slug);
 
 /** Render a list of nodes (and their children) recursively into a nested <ul>. */
 $render = function (array $nodes) use (&$render, $active, $esc) {

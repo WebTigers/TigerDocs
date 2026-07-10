@@ -39,4 +39,47 @@ class Docs_AdminController extends Tiger_Controller_Admin_Action
         $this->view->form     = $form;
         $this->view->override = $o;
     }
+
+    /**
+     * The admin HELP CENTER — admin-visibility docs (how to operate each module), aggregated from
+     * every active module + the platform via the same engine as /docs, filtered to visibility=admin
+     * and rendered in the admin shell. Route: /docs/admin/help(/collection/slug) (see Docs_Bootstrap).
+     */
+    public function helpAction()
+    {
+        $docs   = new Docs_Model_Docs();
+        $locale = defined('LANG') ? LANG : 'en';
+        $vis    = Docs_Model_Docs::VIS_ADMIN;
+        $base   = '/docs/admin/help';
+        $raw    = trim((string) $this->getParam('docpath', ''), '/');
+
+        // Leading segment selects the collection (all namespaced in admin — no prefix-less default).
+        $slugs      = $docs->collectionSlugs($locale, $vis);
+        $collection = '';
+        $docSlug    = '';
+        if ($raw !== '') {
+            $seg = explode('/', $raw, 2);
+            if (in_array($seg[0], $slugs, true)) {
+                $collection = $seg[0];
+                $docSlug    = $seg[1] ?? '';
+            }
+        }
+        if ($collection === '') {
+            $collection = $slugs[0] ?? '';   // land on the first admin collection
+        }
+
+        $this->view->collections = $docs->collections($locale, $vis);
+        $this->view->collection  = $collection;
+        $this->view->docsBase    = $base;
+        $this->view->docScope    = $vis;
+        $this->view->tree        = $collection !== '' ? $docs->tree($locale, $collection, $base, $vis, '') : [];
+        $this->view->title       = 'Help — Tiger Admin';
+
+        $doc = ($collection !== '') ? $docs->resolve($docSlug, $locale, '', $collection, $vis) : null;
+        if ($docSlug !== '' && !$doc) {
+            throw new Zend_Controller_Action_Exception('Doc not found', 404);
+        }
+        $this->view->doc     = $doc;
+        $this->view->docSlug = $doc['slug'] ?? '';
+    }
 }
