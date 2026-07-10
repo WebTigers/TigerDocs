@@ -43,7 +43,7 @@ active theme, and modules that document themselves.*
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current: **0.2.0** — the zero-config, multi-source, dual-surface
+See [CHANGELOG.md](CHANGELOG.md). Current: **0.2.0-beta** — the zero-config, multi-source, dual-surface
 engine (scan + build cache + reference generator).
 
 ## License & support

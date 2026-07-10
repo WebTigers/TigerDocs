@@ -4,7 +4,7 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
-## [0.2.0] — 2026-07-10
+## [0.2.0-beta] — 2026-07-10
 
 The stub becomes a real engine: zero-config, multi-source, dual-surface, distributed-cached.
 
