@@ -7,6 +7,8 @@
  * Values are written to the `config` table (scope=global) by Docs_Service_Settings as
  * tiger.routing.override.docs.* — the live-override tier, effective next request, no deploy
  * (config-discipline: the config store, not a settings table). See ROUTING.md.
+ *
+ * @api
  */
 class Docs_Form_Settings extends Tiger_Form
 {

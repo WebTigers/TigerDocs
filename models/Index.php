@@ -36,6 +36,14 @@ class Docs_Model_Index
     /** Per-request memo, per locale (an FPM worker also skips the fingerprint walk within a request). */
     protected static $_memo = [];
 
+    /**
+     * Wire the cache to its content dir, build callback, and fingerprint-roots callback.
+     *
+     * @param  string    $contentDir absolute path to the content/ dir
+     * @param  callable  $build      callable(string $locale): array — the full scan on a cache miss
+     * @param  ?callable $roots      callable(string $locale): string[] — dirs to fingerprint (optional)
+     * @return void
+     */
     public function __construct($contentDir, callable $build, ?callable $roots = null)
     {
         $this->_contentDir = $contentDir;
@@ -47,6 +55,9 @@ class Docs_Model_Index
      * The built index for a locale:
      *   ['fingerprint','builtAt','checkedAt','collections'=>[…],'trees'=>[col=>nodes],'search'=>[…]]
      * Served from cache when the fingerprint still matches; rebuilt + cached otherwise.
+     *
+     * @param  string $locale the content locale
+     * @return array          the built index for the locale
      */
     public function get($locale)
     {
@@ -69,7 +80,12 @@ class Docs_Model_Index
         return self::$_memo[$locale] = $this->_rebuild($locale, $file);
     }
 
-    /** Force a rebuild for a locale (admin "Rebuild index" / deploy warm), returns the fresh index. */
+    /**
+     * Force a rebuild for a locale (admin "Rebuild index" / deploy warm), returns the fresh index.
+     *
+     * @param  string $locale the content locale to rebuild
+     * @return array          the freshly built index
+     */
     public function rebuild($locale = 'en')
     {
         $locale = preg_match('/^[a-z]{2}$/', (string) $locale) ? (string) $locale : 'en';

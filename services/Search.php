@@ -9,9 +9,17 @@
  * ready-to-use, surface-correct `url`.
  *
  * Called as { module:'docs', service:'search', method:'query', q:'…', scope:'public'|'admin' }.
+ *
+ * @api
  */
 class Docs_Service_Search extends Tiger_Service_Service
 {
+    /**
+     * Search the docs and return ranked, surface-correct hits over /api.
+     *
+     * @param  array $params the request payload (`q`, optional `scope` = public|admin)
+     * @return void          responds via _success/_error (results carry a ready-to-use `url`)
+     */
     public function query(array $params): void
     {
         $q      = isset($params['q']) ? (string) $params['q'] : '';

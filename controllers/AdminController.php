@@ -15,12 +15,21 @@
  */
 class Docs_AdminController extends Tiger_Controller_Admin_Action
 {
-    /** Admin shell (layout) comes from the base; keep the explicit init cascade. */
+    /**
+     * Admin shell (layout) comes from the base; keep the explicit init cascade.
+     *
+     * @return void
+     */
     public function init()
     {
         parent::init();
     }
 
+    /**
+     * Render the Docs settings screen, pre-filled from the live route-override config.
+     *
+     * @return void
+     */
     public function settingsAction()
     {
         // The effective override (module default merged under any config override), enabled or not.
@@ -44,6 +53,9 @@ class Docs_AdminController extends Tiger_Controller_Admin_Action
      * The admin HELP CENTER — admin-visibility docs (how to operate each module), aggregated from
      * every active module + the platform via the same engine as /docs, filtered to visibility=admin
      * and rendered in the admin shell. Route: /docs/admin/help(/collection/slug) (see Docs_Bootstrap).
+     *
+     * @return void
+     * @throws Zend_Controller_Action_Exception (404) when a doc slug is given but resolves to nothing
      */
     public function helpAction()
     {

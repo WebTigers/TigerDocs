@@ -21,13 +21,22 @@ class Docs_IndexController extends Tiger_Controller_Action
     /** @var Docs_Model_Docs */
     protected $_docs;
 
+    /**
+     * Boot the base controller, then instantiate the docs engine for the actions.
+     *
+     * @return void
+     */
     public function init()
     {
         parent::init();
         $this->_docs = new Docs_Model_Docs();
     }
 
-    /** The module's default action just forwards to the canonical docs viewer. */
+    /**
+     * The module's default action just forwards to the canonical docs viewer.
+     *
+     * @return void
+     */
     public function indexAction()
     {
         $this->_forward('docs');
@@ -41,6 +50,9 @@ class Docs_IndexController extends Tiger_Controller_Action
      *   /docs/admin               → admin landing
      *   /docs/admin/pages         → admin/pages
      * An empty doc slug renders the collection's landing; otherwise one resolved doc (404 on miss).
+     *
+     * @return void
+     * @throws Zend_Controller_Action_Exception (404) when the requested doc slug resolves to nothing
      */
     public function docsAction()
     {

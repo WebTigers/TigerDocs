@@ -8,9 +8,17 @@
  * table (scope=global) via Tiger_Model_Config as tiger.routing.override.docs.* — the
  * live-override tier, effective next request, no deploy. Tiger_Routing_Overrides reads exactly
  * these keys. ACL: admin+ (configs/acl.ini).
+ *
+ * @api
  */
 class Docs_Service_Settings extends Tiger_Service_Service
 {
+    /**
+     * Validate the settings form and persist the public route override to config.
+     *
+     * @param  array $params the submitted Docs_Form_Settings values
+     * @return void          responds via _success/_formErrors/_error
+     */
     public function save(array $params): void
     {
         if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
@@ -37,6 +45,9 @@ class Docs_Service_Settings extends Tiger_Service_Service
      * Force a rebuild of THIS server's docs index cache. Handy on a single box or to warm after
      * editing content; in a multi-server fleet it rebuilds only the node that handled the request
      * (the others self-heal on their own next content change), so warm each server at deploy.
+     *
+     * @param  array $params the request payload (unused)
+     * @return void          responds via _success/_error with the indexed page count
      */
     public function rebuild(array $params): void
     {

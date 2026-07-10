@@ -52,6 +52,11 @@ class Docs_Model_Docs
     /** Per-request memo of collection sources, per locale. */
     protected static $_sources = [];
 
+    /**
+     * Resolve the module's content/ directory for the multi-source scan.
+     *
+     * @return void
+     */
     public function __construct()
     {
         $dir = dirname(__DIR__) . '/content';
@@ -75,7 +80,12 @@ class Docs_Model_Docs
         return $this->_indexObj;
     }
 
-    /** Force a rebuild of this server's cached index (admin "Rebuild index" / deploy warm). */
+    /**
+     * Force a rebuild of this server's cached index (admin "Rebuild index" / deploy warm).
+     *
+     * @param  string $locale the content locale to rebuild
+     * @return array          the freshly built index payload
+     */
     public function rebuildIndex($locale = 'en')
     {
         return $this->_index()->rebuild($locale);
@@ -192,7 +202,13 @@ class Docs_Model_Docs
     //  Collections + tree (per surface / visibility)
     // =====================================================================================
 
-    /** Collections visible on a surface, sorted: [ ['slug','title','order','vis'], … ]. */
+    /**
+     * Collections visible on a surface, sorted: [ ['slug','title','order','vis'], … ].
+     *
+     * @param  string $locale     the content locale
+     * @param  string $visibility the target surface (public|admin)
+     * @return array              the visible collections, ordered
+     */
     public function collections($locale = 'en', $visibility = self::VIS_PUBLIC)
     {
         $vis = $this->_vis($visibility);
@@ -202,7 +218,13 @@ class Docs_Model_Docs
         ));
     }
 
-    /** Collection slugs visible on a surface (for the controller's URL split). */
+    /**
+     * Collection slugs visible on a surface (for the controller's URL split).
+     *
+     * @param  string $locale     the content locale
+     * @param  string $visibility the target surface (public|admin)
+     * @return array              the visible collection slugs
+     */
     public function collectionSlugs($locale = 'en', $visibility = self::VIS_PUBLIC)
     {
         return array_map(static fn($c) => $c['slug'], $this->collections($locale, $visibility));
@@ -211,6 +233,13 @@ class Docs_Model_Docs
     /**
      * The nested nav tree for a collection on a surface — visibility-filtered + url-stamped.
      * $default is the prefix-less collection ('guide' public, '' admin → everything namespaced).
+     *
+     * @param  string $locale     the content locale
+     * @param  string $collection the collection slug to build the tree for
+     * @param  string $base       the base path each node URL is stamped under
+     * @param  string $visibility the target surface (public|admin)
+     * @param  string $default    the prefix-less collection slug
+     * @return array              the nested, url-stamped nav tree
      */
     public function tree($locale = 'en', $collection = self::DEFAULT_COLLECTION, $base = '/docs',
                          $visibility = self::VIS_PUBLIC, $default = self::DEFAULT_COLLECTION)
@@ -261,6 +290,13 @@ class Docs_Model_Docs
      *   ['slug','collection','title','html','headings','format','visibility','source']
      * A page whose visibility doesn't match the requesting surface returns null (a public URL can't
      * serve an admin doc, and vice-versa). Empty slug = the collection's _index (landing).
+     *
+     * @param  string $slug       the URL slug (may be nested; empty = the collection landing)
+     * @param  string $locale     the content locale
+     * @param  string $orgId      the tenant/org id for the DB override tier
+     * @param  string $collection the collection slug
+     * @param  string $visibility the requesting surface (public|admin)
+     * @return ?array             the normalized doc array, or null (→ 404)
      */
     public function resolve($slug, $locale = 'en', $orgId = '', $collection = self::DEFAULT_COLLECTION,
                             $visibility = self::VIS_PUBLIC)
@@ -304,7 +340,15 @@ class Docs_Model_Docs
     //  Search (per surface)
     // =====================================================================================
 
-    /** Search a surface's docs. Ranked hits: [ ['slug','collection','title','section','snippet','score'], … ]. */
+    /**
+     * Search a surface's docs. Ranked hits: [ ['slug','collection','title','section','snippet','score'], … ].
+     *
+     * @param  string $q          the search query
+     * @param  string $locale     the content locale
+     * @param  string $visibility the target surface (public|admin)
+     * @param  int    $limit      the maximum number of hits to return
+     * @return array              the ranked hits
+     */
     public function search($q, $locale = 'en', $visibility = self::VIS_PUBLIC, $limit = 8)
     {
         $q = trim(preg_replace('/\s+/', ' ', (string) $q));
