@@ -342,7 +342,10 @@ class Docs_Reference_Generator
                   . ($p['default'] !== null ? ' = ' . $p['default'] : '');
         }
         $sig = $m['name'] . '(' . implode(', ', $ps) . ')' . ($m['return'] ? ': ' . $m['return'] : '');
-        $md  = "### `{$sig}`\n\n";
+        // Heading is the method NAME only → a clean `#name` anchor + a tidy "On this page" entry;
+        // the full signature goes in a code block just below (highlighted, monospace).
+        $md  = "### `{$m['name']}()`\n\n";
+        $md .= "```php\n{$sig}\n```\n\n";
         if (!empty($mdoc['summary'])) { $md .= $mdoc['summary'] . "\n\n"; }
         if (!empty($mdoc['desc']))    { $md .= $mdoc['desc'] . "\n\n"; }
 
