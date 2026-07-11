@@ -4,6 +4,28 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [0.5.0-beta] — 2026-07-11
+
+### Added
+- **Full-width toggle (Normal | Full).** A header control (right slot, `lg`+) switches the docs
+  between the capped reading shell and full-width; the choice is remembered per-browser
+  (localStorage `tigerdocs.layout`) and applied pre-paint via `data-docs-width` on `<html>` (no
+  flash). Full-width uses equal **3 / 6 / 3** columns (left nav keeps its 3, the "on this page" rail
+  goes 2→3, the article fills the middle) and caps the prose at ~52rem so lines stay readable; the
+  rail-less landing stays 3 / 9. Docs-owned + docs-scoped (module `docs.layout.{js,css}` + the theme
+  header region) — no theme or platform change.
+
+### Fixed
+- **"On this page" marker + `#anchor` deep-links were dead on every page with headings.**
+  `_renderFile`/`_renderPage` captured `html` in the result array *before* `_pageNav()` injected the
+  h2/h3 ids into it (evaluation order), so the TOC had ids the article headings lacked — every
+  `getElementById` missed and the scrollspy bailed. Run `_pageNav()` before capturing `$html`.
+
+### Changed
+- **Reference anchors are now clean.** Method headings render as `name()` (→ a `#name` anchor + a
+  tidy "on this page" entry) with the full signature in a code block below — instead of slugifying
+  the whole signature into a monstrous anchor.
+
 ## [0.4.0-beta] — 2026-07-10
 
 ### Added
