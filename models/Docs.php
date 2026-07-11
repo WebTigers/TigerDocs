@@ -553,12 +553,13 @@ class Docs_Model_Docs
         $meta = $this->_metaFromBody($raw);
         $body = $this->_stripMeta($raw);
         $html = (new Tiger_Cms_Renderer())->renderBody($body, $file['format']);
+        $headings = $this->_pageNav($html);   // MUST precede $html capture: it injects h2/h3 ids INTO $html
         return [
             'slug'       => $slug,
             'collection' => $collection,
             'title'      => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_fileTitle($body, $file['format'], $slug ?: $collection),
             'html'       => $html,
-            'headings'   => $this->_pageNav($html),
+            'headings'   => $headings,
             'format'     => $file['format'],
             'visibility' => $this->_vis($meta['visibility'] ?? $defaultVis),
             'source'     => 'file',
@@ -569,12 +570,13 @@ class Docs_Model_Docs
     protected function _renderPage($page, $slug, $collection)
     {
         $html = (new Tiger_Cms_Renderer())->render($page);
+        $headings = $this->_pageNav($html);   // MUST precede $html capture: it injects h2/h3 ids INTO $html
         return [
             'slug'       => $slug,
             'collection' => $collection,
             'title'      => (string) $page->title,
             'html'       => $html,
-            'headings'   => $this->_pageNav($html),
+            'headings'   => $headings,
             'format'     => (string) $page->format,
             'visibility' => self::VIS_PUBLIC,
             'source'     => 'db',
