@@ -1,0 +1,55 @@
+/*! SPDX-License-Identifier: BSD-3-Clause · © 2026 WebTigers · Tiger™/WebTigers™ are trademarks */
+/*
+ * TigerDocs width modes (Phase 1). A header toggle switches Normal | Full-width; the choice is
+ * remembered per-browser in localStorage ('tigerdocs.layout') and applied pre-paint via a
+ * `data-docs-width` attribute on <html>, so there's no flash on load.
+ *
+ * `.docs-shell` replaces Bootstrap's `.container` for the docs page (same 0.75rem gutter), so its
+ * max-width is ours to control cleanly. Full-width takes the shell edge-to-edge but caps the prose
+ * column so long lines never hurt readability ("full shell, readable text").
+ */
+.docs-shell {
+    width: 100%;
+    max-width: var(--docs-normal-max, 1320px);
+    margin-inline: auto;
+    padding-inline: 0.75rem;
+    box-sizing: border-box;
+    transition: max-width .2s ease, padding .2s ease;
+}
+
+/* Full-width: edge-to-edge shell with roomier gutters. */
+[data-docs-width="full"] .docs-shell {
+    max-width: none;
+    padding-inline: clamp(1rem, 3vw, 3rem);
+}
+
+/* ...but keep the article's text at a comfortable measure even on a wide screen. */
+[data-docs-width="full"] .tiger-docs-body {
+    max-width: 52rem;
+}
+
+/*
+ * Full-width, lg+ only: EQUAL asides at 25% each — the left nav keeps its col-lg-3, the right
+ * "on this page" rail goes col-lg-2 → 25%, and the article fills the middle. So an article page is
+ * 3 / 6 / 3, and the rail-less landing is 3 / 9 (the main just fills whatever the right aside
+ * doesn't take). In normal mode the Bootstrap col-lg-3 / col-lg-2 ratios stand (this doesn't apply).
+ */
+@media (min-width: 992px) {
+    [data-docs-width="full"] .docs-aside {
+        flex: 0 0 auto;
+        width: 25%;
+    }
+    [data-docs-width="full"] .docs-main {
+        flex: 1 1 0%;
+        width: auto;
+        max-width: none;
+    }
+}
+
+/* The header toggle button (sits in the theme's tigerHeaderAuth slot on docs pages). */
+[data-docs-width-toggle] {
+    line-height: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .docs-shell { transition: none; }
+}

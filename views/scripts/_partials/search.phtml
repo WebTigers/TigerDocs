@@ -25,12 +25,20 @@ $this->placeholder('tigerHeaderSearch')->set(
   . '</button>'
 );
 
-// Docs is a public reading surface — tell the header to drop its sign-up / sign-in CTAs. The
-// PUMA header renders the `tigerHeaderAuth` region in place of its default when a feature fills
-// it; filling it empty is how a page says "no auth chrome here" (the region contract, no theme edit).
-$this->placeholder('tigerHeaderAuth')->set('');
+// Docs is a public reading surface — no sign-up / sign-in CTAs. Instead of leaving the header's
+// `tigerHeaderAuth` region empty, fill it with the docs WIDTH TOGGLE (Normal | Full-width). It's
+// docs-provided + docs-scoped, so it appears only on docs pages (the region contract, no theme edit).
+// Hidden below lg, where the layout is stacked and full-width is moot.
+$this->placeholder('tigerHeaderAuth')->set(
+    '<button type="button" data-docs-width-toggle'
+  . ' class="btn btn-sm btn-link text-body-secondary d-none d-lg-inline-flex align-items-center p-1"'
+  . ' aria-pressed="false" title="Full width"><i class="fa-solid fa-expand"></i></button>'
+);
 ?>
+<!-- No-flash: apply the stored width to <html> before the docs shell paints. -->
+<script>(function(){try{var o=JSON.parse(localStorage.getItem('tigerdocs.layout'))||{};document.documentElement.setAttribute('data-docs-width',o.mode==='full'?'full':'normal');}catch(e){}})();</script>
 <link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/docs.search.css')) ?>">
+<link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/docs.layout.css')) ?>">
 
 <!-- 2) The ⌘K search modal (hidden until opened). -->
 <div class="modal fade" id="docsSearchModal" tabindex="-1" aria-hidden="true"
@@ -58,3 +66,4 @@ $this->placeholder('tigerHeaderAuth')->set('');
 
 <!-- 3) Launcher JS — defer so it runs after the theme's bootstrap.bundle.js (needed for the modal). -->
 <script src="<?= $this->escape($this->asset($assets . '/docs.search.js')) ?>" defer></script>
+<script src="<?= $this->escape($this->asset($assets . '/docs.layout.js')) ?>" defer></script>

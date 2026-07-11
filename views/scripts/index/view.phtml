@@ -27,15 +27,15 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
 ?>
 <?= $this->render('_partials/search.phtml') ?>
 <link rel="stylesheet" href="<?= $this->escape($this->asset('/_modules/docs/vendor/highlight/docs.hljs.css')) ?>">
-<div class="container py-4" style="max-width:1320px;">
+<div class="docs-shell py-4">
     <div class="row g-4">
-        <aside class="col-lg-3 col-md-4">
+        <aside class="col-lg-3 col-md-4 docs-aside docs-aside-left">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
                 <?= $this->partial('_partials/nav.phtml', ['collections' => $this->collections, 'collection' => $this->collection, 'tree' => $this->tree, 'docSlug' => $this->docSlug, 'docsBase' => $this->docsBase]) ?>
             </div>
         </aside>
 
-        <main class="<?= $mainCol ?> col-md-8">
+        <main class="<?= $mainCol ?> col-md-8 docs-main">
             <article class="tiger-docs-body">
                 <?= $doc['html'] ?>
             </article>
@@ -63,7 +63,7 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
         </main>
 
         <?php if ($headings): ?>
-        <aside class="col-lg-2 d-none d-lg-block">
+        <aside class="col-lg-2 d-none d-lg-block docs-aside docs-aside-right">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
                 <div class="small text-uppercase text-body-secondary mb-2 fw-semibold" style="letter-spacing:.06em;"><?= $this->translate('docs.onthispage') ?></div>
                 <nav class="docs-toc nav flex-column border-start ps-3 position-relative" id="docsToc">
