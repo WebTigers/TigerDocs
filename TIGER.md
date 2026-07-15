@@ -43,7 +43,7 @@ active theme, and modules that document themselves.*
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current: **0.5.0-beta** — the zero-config, multi-source engine
+See [CHANGELOG.md](CHANGELOG.md). Current: **0.7.0-beta** — the zero-config, multi-source engine
 (scan + build cache + docblock reference generator) plus a full-width docs toggle.
 
 ## License & support
