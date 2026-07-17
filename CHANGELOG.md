@@ -6,6 +6,8 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [0.8.0-beta] — 2026-07-17
+
 ### Added
 - **Docs map into the sitemap.** TigerDocs now contributes every **public** doc URL to the core
   `Tiger_Sitemap` registry, so `/sitemap.xml` lists the whole docs site (the default collection at
