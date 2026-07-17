@@ -289,6 +289,41 @@ class Docs_Model_Docs
         return $this->_urlize($nodes, $prefix);
     }
 
+    /**
+     * Every PUBLIC doc URL, flat — for the sitemap. TigerDocs owns its `/docs/…` URL form (the default
+     * collection is served prefix-less at `/docs`, the rest under `/docs/<collection>`), so it maps
+     * itself into `Tiger_Sitemap` rather than teaching the SEO layer how a docs URL is shaped. Each
+     * collection landing plus every page node in its public tree; headers (url === '') are skipped.
+     * Docs are files with no per-row timestamp surfaced here, so entries carry no <lastmod>.
+     *
+     * @param  string $locale the content locale
+     * @return array          [ ['loc' => '/docs/…'], … ] — de-duped, public surface only
+     */
+    public function publicUrls($locale = 'en')
+    {
+        $locale = $this->_safeSegment($locale) ?: 'en';
+        $locs   = [];
+        foreach ($this->collectionSlugs($locale, self::VIS_PUBLIC) as $slug) {
+            // The collection landing (its _index): '/docs' for the default collection, else '/docs/<slug>'.
+            $locs[] = ($slug === self::DEFAULT_COLLECTION) ? '/docs' : '/docs/' . $slug;
+            $this->_walkUrls($this->tree($locale, $slug, '/docs', self::VIS_PUBLIC), $locs);
+        }
+        $out = [];
+        foreach (array_unique($locs) as $loc) {
+            $out[] = ['loc' => $loc];
+        }
+        return $out;
+    }
+
+    /** Collect every page node's stamped `url` from a url-ized tree (headers carry '' — skipped). */
+    protected function _walkUrls(array $nodes, array &$locs)
+    {
+        foreach ($nodes as $n) {
+            if (!empty($n['url'])) { $locs[] = $n['url']; }
+            if (!empty($n['children'])) { $this->_walkUrls($n['children'], $locs); }
+        }
+    }
+
     /** Keep pages of the wanted visibility; keep a header only if it has ≥1 matching descendant. */
     protected function _filterVis(array $nodes, $vis)
     {

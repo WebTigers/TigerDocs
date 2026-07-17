@@ -32,6 +32,26 @@ class Docs_Bootstrap extends Zend_Application_Module_Bootstrap
         ]);
     }
 
+    /**
+     * Contribute every PUBLIC doc URL to the sitemap. TigerDocs owns its `/docs/…` URL shape, so it
+     * maps itself into the core Tiger_Sitemap registry (like the CMS pages + blog providers) rather
+     * than the SEO layer learning what a docs URL looks like. Guarded so the module still installs on
+     * a Core that predates the registry — it simply contributes nothing there.
+     */
+    protected function _initDocsSitemap()
+    {
+        if (!class_exists('Tiger_Sitemap')) {
+            return;   // a Core too old for the sitemap registry — nothing to contribute to
+        }
+        Tiger_Sitemap::register('docs', function (array $ctx) {
+            try {
+                return (new Docs_Model_Docs())->publicUrls((string) ($ctx['locale'] ?? 'en'));
+            } catch (Throwable $e) {
+                return [];   // a docs build hiccup must never break the sitemap
+            }
+        });
+    }
+
     /** Contribute the Docs page to the admin Settings tree (ACL-gated in the menu). */
     protected function _initAdminSettings()
     {

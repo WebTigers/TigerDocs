@@ -4,6 +4,16 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [Unreleased]
+
+### Added
+- **Docs map into the sitemap.** TigerDocs now contributes every **public** doc URL to the core
+  `Tiger_Sitemap` registry, so `/sitemap.xml` lists the whole docs site (the default collection at
+  `/docs`, the rest under `/docs/<collection>`, and every page node in each public tree). TigerDocs
+  owns its URL shape — a new `Docs_Model_Docs::publicUrls($locale)` walks the visibility-filtered
+  trees — rather than the SEO layer learning how a docs URL is built. Guarded on `Tiger_Sitemap`, so
+  it no-ops on a Core that predates the registry; admin-only docs are never mapped.
+
 ## [0.5.0-beta] — 2026-07-11
 
 ### Added
