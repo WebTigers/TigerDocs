@@ -6,6 +6,19 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [0.9.0-beta] — 2026-07-19
+
+### Added
+- **`/docs/llms.txt` + `/docs/llms-full.txt` — the docs, LLM-friendly.** TigerDocs now emits an
+  [llms.txt](https://llmstxt.org/) export: `llms.txt` is a curated Markdown map (a section per public
+  collection, its nav tree as a link list), and `llms-full.txt` is every public doc's plain text in one
+  file — ideal for feeding a language model the whole docs site cheaply. Both are **regenerated on every
+  index rebuild** (`Docs_Model_Docs::rebuildIndex` → `_writeLlms`), cached per-server in
+  `var/docs-llms/<locale>[-full].txt` (a build artifact, never committed), and served as `text/plain`
+  routes off the docs surface (`Docs_IndexController` intercepts the `llms.txt` / `llms-full.txt` slug).
+  URLs honor an admin `/help` retarget and become absolute when `tiger.site.url` is set, else
+  site-relative. Sibling to the app-wide `/llms.txt` that TigerSEO serves (which links here).
+
 ## [0.8.0-beta] — 2026-07-17
 
 ### Added

@@ -92,7 +92,160 @@ class Docs_Model_Docs
      */
     public function rebuildIndex($locale = 'en')
     {
-        return $this->_index()->rebuild($locale);
+        $index = $this->_index()->rebuild($locale);
+        try {
+            $this->_writeLlms($locale, $index);   // regenerate the LLM export on every index rebuild
+        } catch (Throwable $e) {
+            /* llms.txt is best-effort — a write failure must never break the index rebuild */
+        }
+        return $index;
+    }
+
+    // =====================================================================================
+    //  llms.txt / llms-full.txt — the LLM-friendly export, regenerated on every index rebuild
+    // =====================================================================================
+
+    /**
+     * The cached /docs/llms.txt (a curated Markdown map) or /docs/llms-full.txt (every public doc's
+     * text concatenated). Built fresh on each index rebuild; this getter rebuilds on a cold cache so
+     * the first request after a deploy still gets a file.
+     *
+     * @param  string $locale the content locale
+     * @param  bool   $full   true = llms-full.txt, false = llms.txt
+     * @return string
+     */
+    public function llms($locale = 'en', $full = false)
+    {
+        $path = $this->_llmsPath($locale, $full);
+        if (!is_file($path)) {
+            $this->rebuildIndex($locale);   // cold cache (fresh deploy) → build it now
+        }
+        return is_file($path) ? (string) file_get_contents($path) : '';
+    }
+
+    /** Write both llms files for a locale from a freshly-built index payload (best-effort). */
+    protected function _writeLlms($locale, array $index)
+    {
+        $dir = $this->_llmsDir();
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return;
+        }
+        @file_put_contents($this->_llmsPath($locale, false), $this->_buildLlmsIndex($locale));
+        @file_put_contents($this->_llmsPath($locale, true),  $this->_buildLlmsFull($locale, $index));
+    }
+
+    /** The per-server llms cache dir (app var/ — a build artifact, never committed). */
+    protected function _llmsDir()
+    {
+        $base = defined('APPLICATION_PATH') ? dirname(APPLICATION_PATH) : dirname($this->_contentDir);
+        return $base . '/var/docs-llms';
+    }
+
+    /** The cache path for a locale's llms.txt / llms-full.txt. */
+    protected function _llmsPath($locale, $full)
+    {
+        $locale = $this->_safeSegment($locale) ?: 'en';
+        return $this->_llmsDir() . '/' . $locale . ($full ? '-full' : '') . '.txt';
+    }
+
+    /** Build the curated map: a section per PUBLIC collection, each a link list of its docs. */
+    protected function _buildLlmsIndex($locale)
+    {
+        $origin = $this->_docsOrigin();
+        $site   = $this->_siteName();
+        $out    = ['# ' . $site . ' — Documentation', ''];
+        $out[]  = '> The documentation for ' . $site . ', mapped for language models. '
+                . 'Full text at ' . $origin . $this->_docsBase() . '/llms-full.txt';
+        foreach ($this->collections($locale, self::VIS_PUBLIC) as $c) {
+            $slug  = (string) $c['slug'];
+            $out[] = '';
+            $out[] = '## ' . ((string) ($c['title'] ?? '') !== '' ? (string) $c['title'] : $this->_humanize($slug));
+            $this->_llmsWalk($this->tree($locale, $slug, $this->_docsBase(), self::VIS_PUBLIC), $origin, $out);
+        }
+        return implode("\n", $out) . "\n";
+    }
+
+    /** Walk a nav tree emitting Markdown link lines (header nodes become bold section labels). */
+    protected function _llmsWalk(array $nodes, $origin, array &$out)
+    {
+        foreach ($nodes as $n) {
+            $title = trim((string) ($n['title'] ?? ''));
+            if ($title !== '') {
+                if (!empty($n['header']) || (string) ($n['url'] ?? '') === '') {
+                    $out[] = '- **' . $title . '**';
+                } else {
+                    $out[] = '- [' . $title . '](' . $origin . $n['url'] . ')';
+                }
+            }
+            if (!empty($n['children'])) {
+                $this->_llmsWalk($n['children'], $origin, $out);
+            }
+        }
+    }
+
+    /** Build the full corpus: every PUBLIC doc's title + URL + plain text, from the search index. */
+    protected function _buildLlmsFull($locale, array $index)
+    {
+        $origin = $this->_docsOrigin();
+        $out    = ['# ' . $this->_siteName() . ' — Documentation (full text)', ''];
+        foreach (($index['search'] ?? []) as $e) {
+            if ((string) ($e['visibility'] ?? self::VIS_PUBLIC) !== self::VIS_PUBLIC) {
+                continue;
+            }
+            $coll = (string) ($e['collection'] ?? '');
+            $slug = (string) ($e['slug'] ?? '');
+            $pre  = $this->_docsBase() . ($coll !== '' && $coll !== self::DEFAULT_COLLECTION ? '/' . $coll : '');
+            $out[] = '## ' . (string) ($e['title'] ?? $slug);
+            $out[] = 'URL: ' . $origin . $pre . '/' . $slug;
+            $out[] = '';
+            $out[] = trim((string) ($e['text'] ?? ''));
+            $out[] = '';
+            $out[] = '---';
+            $out[] = '';
+        }
+        return implode("\n", $out) . "\n";
+    }
+
+    /** The site's absolute origin (tiger.site.url) for link building, or '' for site-relative links. */
+    protected function _docsOrigin()
+    {
+        return rtrim($this->_cfg('tiger.site.url', ''), '/');
+    }
+
+    /** The docs' public base path (honors an admin /help retarget), defaulting to /docs. */
+    protected function _docsBase()
+    {
+        if (class_exists('Tiger_Routing_Overrides')) {
+            $o = Tiger_Routing_Overrides::get('docs');
+            if ($o && !empty($o['prefix'])) {
+                return '/' . trim((string) $o['prefix'], '/');
+            }
+        }
+        return '/docs';
+    }
+
+    /** The site name (tiger.site.name) for the llms header. */
+    protected function _siteName()
+    {
+        $n = $this->_cfg('tiger.site.name', '');
+        return $n !== '' ? $n : 'This site';
+    }
+
+    /** Read a dotted config value (full path, e.g. tiger.site.name), or a default. */
+    protected function _cfg($full, $default = '')
+    {
+        try {
+            $node = Zend_Registry::get('Zend_Config');
+        } catch (Throwable $e) {
+            return $default;
+        }
+        foreach (explode('.', (string) $full) as $k) {
+            $node = is_object($node) ? ($node->{$k} ?? null) : null;
+            if ($node === null) {
+                return $default;
+            }
+        }
+        return (!$node instanceof Zend_Config) ? (string) $node : $default;
     }
 
     // =====================================================================================

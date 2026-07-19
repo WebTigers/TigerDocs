@@ -60,6 +60,17 @@ class Docs_IndexController extends Tiger_Controller_Action
         $base   = $this->_base();
         $raw    = trim((string) $this->getParam('slug', ''), '/');
 
+        // The LLM export — /docs/llms.txt (curated map) + /docs/llms-full.txt (every public doc's
+        // text). Served as plain text from the per-server cache the index rebuild writes; the getter
+        // builds it on a cold cache. (llms.txt sibling to the app's /llms.txt — see TigerSEO.)
+        if ($raw === 'llms.txt' || $raw === 'llms-full.txt') {
+            $this->_helper->layout->disableLayout();
+            $this->_helper->viewRenderer->setNoRender(true);
+            $this->getResponse()->setHeader('Content-Type', 'text/plain; charset=UTF-8', true);
+            $this->getResponse()->setBody($this->_docs->llms($locale, $raw === 'llms-full.txt'));
+            return;
+        }
+
         // Public surface → only PUBLIC-visibility docs. Split the leading segment: if it names a
         // (public) collection, it's <collection>/<rest>, else the default (guide).
         $vis        = Docs_Model_Docs::VIS_PUBLIC;
