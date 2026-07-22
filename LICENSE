@@ -1,7 +1,6 @@
 BSD 3-Clause License
 
-Copyright (c) 2026 K. Beau Beauchamp <beau@webtigers.com>
-All rights reserved.
+Copyright (c) 2026 K. Beau Beauchamp
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -27,19 +26,3 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
---------------------------------------------------------------------------------
-
-TigerDocs is a first-party module for Tiger, built on TigerZF (a fork of Zend
-Framework 1 modernized for PHP 8, distributed under the New BSD License,
-Copyright (c) 2005-2015 Zend Technologies USA Inc.). It renders content through
-bundled components — including Parsedown and, at the theme layer, Bootstrap and
-Font Awesome — which are the property of their respective authors and are
-distributed under their own licenses.
-
-Trademarks
-
-"Tiger", "TigerZF", "TigerDocs", and "WebTigers", together with associated logos
-and product names, are trademarks of WebTigers. They are NOT licensed under the
-BSD license above. You may use, modify, and redistribute this software freely,
-but the trademarks and their goodwill are reserved.
