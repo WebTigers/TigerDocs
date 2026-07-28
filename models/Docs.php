@@ -680,29 +680,83 @@ class Docs_Model_Docs
         return ['collections' => $collections, 'trees' => $trees, 'search' => $search];
     }
 
-    /** Scan a source's files (all its dirs) → [id => ['id','title','header','order','parent','visibility']]. */
+    /**
+     * Scan a source's files (all its dirs, RECURSIVELY) → [id => ['id','title','header','order',
+     * 'parent','visibility']]. A subfolder nests: its files get folder-relative ids (e.g.
+     * "tigershop/overview") and the folder is their parent — supplied by the folder's `_index` (label/
+     * order/visibility) or a synthesized label-only header. Explicit `parent:` front-matter still
+     * overrides the folder-derived parent, so the flat + `parent:` tree model keeps working unchanged.
+     */
     protected function _scanNodes(array $desc)
     {
         $flat = [];
         // Low→high priority so a higher-priority dir (hand-written) overwrites a generated same-id node.
         foreach (array_reverse($desc['dirs']) as $dir) {
-            foreach ((glob($dir . '/*.{md,markdown,html,htm,phtml}', GLOB_BRACE) ?: []) as $path) {
-                $id = preg_replace('/\.[^.]+$/', '', basename($path));
-                if ($id === '_index' || $this->_safeSegment($id) === '') {
-                    continue;
-                }
-                $meta = $this->_meta($path);
-                $flat[$id] = [
-                    'id'         => $id,
-                    'title'      => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($id),
-                    'header'     => $this->_bool($meta['header'] ?? ''),
-                    'order'      => $this->_order($meta['order'] ?? null),
-                    'parent'     => $this->_safeSegment($meta['parent'] ?? ''),
-                    'visibility' => $this->_vis($meta['visibility'] ?? $desc['defaultVis']),
+            $real = realpath($dir);
+            if ($real) {
+                $this->_scanDir($real, $real, $desc, $flat);
+            }
+        }
+        // Synthesize a label-only header for any folder referenced as a parent but lacking an _index,
+        // so a nested folder still renders as a section (walks the full ancestor chain).
+        foreach (array_keys($flat) as $id) {
+            $p = $flat[$id]['parent'];
+            while ($p !== '' && !isset($flat[$p])) {
+                $flat[$p] = [
+                    'id'         => $p,
+                    'title'      => $this->_humanize(basename($p)),
+                    'header'     => true,
+                    'order'      => $this->_order(null),
+                    'parent'     => (dirname($p) === '.' ? '' : dirname($p)),
+                    'visibility' => $flat[$id]['visibility'],
                 ];
+                $p = $flat[$p]['parent'];
             }
         }
         return $flat;
+    }
+
+    /** Recursively scan one dir into $flat; $base is the collection root (for folder-relative ids). */
+    protected function _scanDir($base, $dir, array $desc, array &$flat)
+    {
+        foreach ((glob($dir . '/*.{md,markdown,html,htm,phtml}', GLOB_BRACE) ?: []) as $path) {
+            $rel    = preg_replace('/\.[^.]+$/', '', substr($path, strlen($base) + 1));   // "tigershop/overview"
+            $name   = basename($rel);
+            $folder = (dirname($rel) === '.' ? '' : dirname($rel));                       // "tigershop" | ""
+            if (strtolower($name) === 'readme') {
+                continue;                                       // a repo README is not a doc
+            }
+            if ($name === '_index') {
+                if ($folder === '') {
+                    continue;                                   // root _index = the collection landing (via _indexMeta)
+                }
+                $id     = $folder;                              // a subfolder's _index = the folder node itself
+                $parent = (dirname($folder) === '.' ? '' : dirname($folder));
+                $label  = basename($folder);
+            } else {
+                $id     = $rel;
+                $parent = $folder;
+                $label  = $name;
+            }
+            if ($this->_safePath($id) === '') {
+                continue;
+            }
+            $meta       = $this->_meta($path);
+            $metaParent = $this->_safePath($meta['parent'] ?? '');
+            $flat[$id] = [
+                'id'         => $id,
+                'title'      => ($meta['title'] ?? '') !== '' ? $meta['title'] : $this->_humanize($label),
+                'header'     => $this->_bool($meta['header'] ?? ''),
+                'order'      => $this->_order($meta['order'] ?? null),
+                'parent'     => $metaParent !== '' ? $metaParent : $parent,
+                'visibility' => $this->_vis($meta['visibility'] ?? $desc['defaultVis']),
+            ];
+        }
+        foreach ((glob($dir . '/*', GLOB_ONLYDIR) ?: []) as $sub) {
+            if ($this->_safeSegment(basename($sub)) !== '') {
+                $this->_scanDir($base, $sub, $desc, $flat);
+            }
+        }
     }
 
     /** Build the nested node tree (no urls) from a flat scan — arbitrary depth. */
@@ -817,10 +871,12 @@ class Docs_Model_Docs
         }
     }
 
-    /** Find a file within a source (search its dirs in priority order), each extension. '_index' allowed. */
+    /** Find a file within a source (dirs in priority order), each extension. Accepts a nested path
+     *  ("tigershop/overview"); a folder node also resolves to its "<name>/_index.*". '_index' allowed.
+     *  Each resolved path is realpath-contained to its dir, so a nested name can't traverse out. */
     protected function _findFileIn(array $desc, $name)
     {
-        if ($name !== '_index' && $this->_safeSegment($name) === '') {
+        if ($name !== '_index' && $this->_safePath($name) === '') {
             return null;
         }
         foreach ($desc['dirs'] as $dir) {
@@ -828,10 +884,12 @@ class Docs_Model_Docs
             if (!$real) {
                 continue;
             }
-            foreach (self::$_formats as $ext => $format) {
-                $path = realpath($dir . '/' . $name . '.' . $ext);
-                if ($path && strpos($path, $real . DIRECTORY_SEPARATOR) === 0 && is_file($path)) {
-                    return ['path' => $path, 'format' => $format];
+            foreach ([$name, $name . '/_index'] as $cand) {
+                foreach (self::$_formats as $ext => $format) {
+                    $path = realpath($dir . '/' . $cand . '.' . $ext);
+                    if ($path && strpos($path, $real . DIRECTORY_SEPARATOR) === 0 && is_file($path)) {
+                        return ['path' => $path, 'format' => $format];
+                    }
                 }
             }
         }
@@ -896,8 +954,7 @@ class Docs_Model_Docs
 
     protected function _normalizeSlug($slug)
     {
-        $slug = strtolower(trim((string) $slug, "/ \t\n\r\0"));
-        return $slug === '' ? '' : ($this->_safeSegment($slug) === '' ? '' : $slug);
+        return $this->_safePath($slug);
     }
 
     protected function _safeSegment($seg)
@@ -907,6 +964,24 @@ class Docs_Model_Docs
             return '';
         }
         return preg_match('/^[a-z0-9][a-z0-9._-]*$/', $seg) ? $seg : '';
+    }
+
+    /** Validate a possibly-nested slug path — each '/'-segment must be safe (no traversal). '' if any isn't. */
+    protected function _safePath($path)
+    {
+        $path = strtolower(trim((string) $path, "/ \t\n\r\0"));
+        if ($path === '') {
+            return '';
+        }
+        $out = [];
+        foreach (explode('/', $path) as $seg) {
+            $s = $this->_safeSegment($seg);
+            if ($s === '') {
+                return '';
+            }
+            $out[] = $s;
+        }
+        return implode('/', $out);
     }
 
     protected function _fileTitle($body, $format, $slug)
