@@ -63,7 +63,14 @@ class Docs_Model_Docs
      */
     public function __construct()
     {
+        // The content dir is config-overridable via `docs.content_dir` so the private docs content can
+        // be sourced EXTERNALLY (e.g. synced from S3 on each instance) rather than baked into the
+        // module — decoupling content from code for a stateless fleet. Falls back to the module's own
+        // content/ dir (fresh install / no external source).
         $dir = dirname(__DIR__) . '/content';
+        $cfg = Zend_Registry::isRegistered('Zend_Config') ? Zend_Registry::get('Zend_Config') : null;
+        $override = ($cfg && $cfg->get('docs')) ? trim((string) $cfg->get('docs')->get('content_dir')) : '';
+        if ($override !== '') { $dir = $override; }
         $this->_contentDir = realpath($dir) ?: $dir;
     }
 
