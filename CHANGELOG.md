@@ -6,6 +6,14 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [0.10.0-beta] — 2026-08-22
+
+### Added
+- **Full pt / hi / de / fr UI translation.** The module chrome + API-message strings (`docs.*`) now
+  ship Portuguese, Hindi, German, and French alongside English and Spanish — all 17 keys, key-parity
+  with `en`, `php -l` clean. Register: formal-*Sie* German, pragmatic dev-French, natural Devanagari
+  Hindi. (Doc CONTENT under `content/<locale>/` is a separate sprint and remains English-only for now.)
+
 ## [0.9.0-beta] — 2026-07-19
 
 ### Added
