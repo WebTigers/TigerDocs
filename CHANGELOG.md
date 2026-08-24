@@ -6,6 +6,15 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-08-24
+
+**1.0** — the documentation module ships stable.
+
+### Changed
+- Version is now `1.0.0` (was `0.10.0-beta`). No behaviour change; Tiger itself reached 1.0 and the
+  module line follows.
+- Ships the full six-locale UI (en/es/pt/hi/de/fr).
+
 ## [0.10.0-beta] — 2026-08-22
 
 ### Added
