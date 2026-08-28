@@ -29,4 +29,8 @@ return [
     'docs.search.placeholder' => 'Search docs…',
     'docs.search.hint'        => 'Type to search the documentation.',
     'docs.search.empty'       => 'No results. Try different words.',
+
+    // The marketplace listing blurb. Pulled into the public directory by TigerVendors at the
+    // pinned ref, so this file stays the one place this module's copy is translated.
+    'docs.listing.description'               => 'A public documentation site for your Tiger app — organized, searchable help pages rendered in your active theme.',
 ];

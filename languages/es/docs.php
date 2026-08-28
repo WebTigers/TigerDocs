@@ -28,4 +28,8 @@ return [
     'docs.search.placeholder' => 'Buscar en la documentación…',
     'docs.search.hint'        => 'Escribe para buscar en la documentación.',
     'docs.search.empty'       => 'Sin resultados. Prueba con otras palabras.',
+
+    // The marketplace listing blurb. Pulled into the public directory by TigerVendors at the
+    // pinned ref, so this file stays the one place this module's copy is translated.
+    'docs.listing.description'               => 'Un sitio de documentación público para tu aplicación Tiger: páginas de ayuda organizadas y con búsqueda, renderizadas en tu tema activo.',
 ];

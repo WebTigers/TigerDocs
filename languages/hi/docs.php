@@ -28,4 +28,8 @@ return [
     'docs.search.placeholder' => 'दस्तावेज़ खोजें…',
     'docs.search.hint'        => 'दस्तावेज़ में खोजने के लिए टाइप करें।',
     'docs.search.empty'       => 'कोई परिणाम नहीं। अलग शब्द आज़माएँ।',
+
+    // The marketplace listing blurb. Pulled into the public directory by TigerVendors at the
+    // pinned ref, so this file stays the one place this module's copy is translated.
+    'docs.listing.description'               => 'आपके Tiger ऐप के लिए एक सार्वजनिक दस्तावेज़ीकरण साइट — व्यवस्थित, खोजने योग्य सहायता पृष्ठ, आपकी सक्रिय थीम में प्रस्तुत।',
 ];
