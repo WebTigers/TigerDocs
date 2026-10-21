@@ -21,7 +21,7 @@ class Docs_Service_Settings extends Tiger_Service_Service
      */
     public function save(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('save')) { $this->_error('core.api.error.not_allowed'); return; }
 
         $form = new Docs_Form_Settings();
         if (!$form->isValid($params)) { $this->_formErrors($form); return; }
@@ -51,7 +51,7 @@ class Docs_Service_Settings extends Tiger_Service_Service
      */
     public function rebuild(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('rebuild')) { $this->_error('core.api.error.not_allowed'); return; }
 
         try {
             $locale = defined('LANG') ? LANG : 'en';
@@ -74,7 +74,7 @@ class Docs_Service_Settings extends Tiger_Service_Service
      */
     public function buildReference(array $params): void
     {
-        if (!$this->_isAdmin()) { $this->_error('core.api.error.not_allowed'); return; }
+        if (!$this->_isAllowed('buildReference')) { $this->_error('core.api.error.not_allowed'); return; }
 
         try {
             require_once dirname(__DIR__) . '/bin/reference.php';   // defines Docs_Reference_Generator

@@ -27,7 +27,7 @@ class Docs_Service_Search extends Tiger_Service_Service
         $scope  = (($params['scope'] ?? '') === Docs_Model_Docs::VIS_ADMIN)
             ? Docs_Model_Docs::VIS_ADMIN : Docs_Model_Docs::VIS_PUBLIC;
 
-        if ($scope === Docs_Model_Docs::VIS_ADMIN && !$this->_isAdmin()) {
+        if ($scope === Docs_Model_Docs::VIS_ADMIN && !$this->_isAllowed('query')) {
             $this->_error('core.api.error.not_allowed');
             return;
         }
