@@ -1,27 +1,40 @@
 {
-  "schema": "tiger.module/v1",
-  "slug": "docs",
-  "name": "Documentation",
-  "version": "1.0.3",
-  "description": "A public documentation site for your Tiger app — organized help pages rendered in your active theme, served from shipped files or database content.",
-  "author": { "name": "WebTigers", "url": "https://webtigers.com" },
-  "homepage": "https://github.com/WebTigers/TigerDocs",
-  "repository": "https://github.com/WebTigers/TigerDocs",
-  "license": "BSD-3-Clause",
-  "keywords": ["docs", "documentation", "help", "knowledge-base"],
-
-  "requires": { "tiger": ">=1.0", "php": ">=8.1" },
-
-  "namespace": "Docs",
-  "provides": {
-    "routes":     ["/docs", "/docs/:slug"],
-    "acl":        "configs/acl.ini",
-    "content":    "content",
-    "migrations": "migrations",
-    "assets":     "assets"
-  },
-
-  "pricing": { "model": "free", "pro_url": null },
-
-  "_notes": "The repository ROOT is the module: on install its contents land in application/modules/<slug>/. Tiger reads this manifest to install/verify; the Vendor Registry entry is this manifest + the vetted release ref."
+    "schema": "tiger.module/v1",
+    "slug": "docs",
+    "name": "Documentation",
+    "version": "1.0.4",
+    "description": "A public documentation site for your Tiger app \u2014 organized help pages rendered in your active theme, served from shipped files or database content.",
+    "author": {
+        "name": "WebTigers",
+        "url": "https://webtigers.com"
+    },
+    "homepage": "https://github.com/WebTigers/TigerDocs",
+    "repository": "https://github.com/WebTigers/TigerDocs",
+    "license": "BSD-3-Clause",
+    "keywords": [
+        "docs",
+        "documentation",
+        "help",
+        "knowledge-base"
+    ],
+    "requires": {
+        "tiger": ">=1.0",
+        "php": ">=8.1"
+    },
+    "namespace": "Docs",
+    "provides": {
+        "routes": [
+            "/docs",
+            "/docs/:slug"
+        ],
+        "acl": "configs/acl.ini",
+        "content": "content",
+        "migrations": "migrations",
+        "assets": "assets"
+    },
+    "pricing": {
+        "model": "free",
+        "pro_url": null
+    },
+    "_notes": "The repository ROOT is the module: on install its contents land in application/modules/<slug>/. Tiger reads this manifest to install/verify; the Vendor Registry entry is this manifest + the vetted release ref."
 }
