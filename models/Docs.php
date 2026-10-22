@@ -42,6 +42,20 @@ class Docs_Model_Docs
     const VIS_PUBLIC         = 'public';
     const VIS_ADMIN          = 'admin';
 
+    /**
+     * Externally-hosted doc sets offered in the collection switcher (see externalLinks()).
+     *
+     * The TigerZF manual is the ZF1 reference this framework is built on. It is deliberately NOT
+     * installable: TigerZF `export-ignore`s its documentation/ folder out of the composer dist, so
+     * no install has it on disk and every install links to the hosted copy instead.
+     */
+    protected static $_externalDefault = [
+        'tigerzf' => [
+            'title' => 'TigerZF Manual',
+            'url'   => 'https://tigerzf.webtigers.com/docs/en/',
+        ],
+    ];
+
     /** ext => Tiger_Cms_Renderer format. */
     protected static $_formats = [
         'md'    => Tiger_Model_Page::FORMAT_MARKDOWN,
@@ -427,6 +441,68 @@ class Docs_Model_Docs
     public function collectionSlugs($locale = 'en', $visibility = self::VIS_PUBLIC)
     {
         return array_map(static fn($c) => $c['slug'], $this->collections($locale, $visibility));
+    }
+
+    /**
+     * What the collection SWITCHER offers: this install's collections, then any external doc sets.
+     *
+     * Deliberately separate from collections() / collectionSlugs(), which answer "what can
+     * /docs/<slug> resolve to". An external entry never can — there is no directory to scan and no
+     * tree to build — so only the menu knows about it. Mixing it into collections() would make the
+     * controller treat its key as a local URL segment.
+     *
+     * @param  string $locale     the content locale
+     * @param  string $visibility the target surface (public|admin)
+     * @return array              collections (with 'slug'), then external entries (with 'url')
+     */
+    public function collectionsForMenu($locale = 'en', $visibility = self::VIS_PUBLIC)
+    {
+        return array_merge($this->collections($locale, $visibility), $this->externalLinks());
+    }
+
+    /**
+     * Externally-hosted doc sets: [ ['slug'=>'', 'title', 'url', 'external'=>true, 'key'], … ].
+     *
+     * Shipped defaults are in $_externalDefault. An install adds or overrides entries with config
+     * `docs.external.<key>.title` / `.url`; clearing a url DROPS that entry, which is how a shipped
+     * default is turned off without a code change. Only http(s) urls are accepted — these render as
+     * links inside a page the docs engine did not author.
+     *
+     * @return array the external switcher entries, in declaration order
+     */
+    public function externalLinks()
+    {
+        $merged = array_replace_recursive(self::$_externalDefault, $this->_externalConfigured());
+
+        $out = [];
+        foreach ($merged as $key => $e) {
+            $url   = is_array($e) ? trim((string) ($e['url']   ?? '')) : '';
+            $title = is_array($e) ? trim((string) ($e['title'] ?? '')) : '';
+            if ($url === '' || $title === '' || !preg_match('#^https?://#i', $url)) {
+                continue;
+            }
+            $out[] = [
+                'slug'     => '',          // no local segment — this is not a collection
+                'title'    => $title,
+                'url'      => $url,
+                'external' => true,
+                'key'      => (string) $key,
+            ];
+        }
+        return $out;
+    }
+
+    /** `docs.external` from config as a plain array (empty when unset or not a section). */
+    protected function _externalConfigured()
+    {
+        try {
+            $cfg = Zend_Registry::get('Zend_Config');
+        } catch (Throwable $e) {
+            return [];
+        }
+        $docs = ($cfg instanceof Zend_Config) ? ($cfg->docs ?? null) : null;
+        $node = ($docs instanceof Zend_Config) ? ($docs->external ?? null) : null;
+        return ($node instanceof Zend_Config) ? $node->toArray() : [];
     }
 
     /**

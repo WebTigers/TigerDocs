@@ -80,7 +80,9 @@ class Docs_AdminController extends Tiger_Controller_Admin_Action
             $collection = $slugs[0] ?? '';   // land on the first admin collection
         }
 
-        $this->view->collections = $docs->collections($locale, $vis);
+        // The switcher also carries externally-hosted doc sets (the TigerZF manual) — see
+        // Docs_Model_Docs::collectionsForMenu(). The surface's URL split is unaffected.
+        $this->view->collections = $docs->collectionsForMenu($locale, $vis);
         $this->view->collection  = $collection;
         $this->view->docsBase    = $base;
         $this->view->docScope    = $vis;

@@ -4,12 +4,32 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [Unreleased]
+
+## [1.1.0] — 2026-10-22
+
+### Added
+- The docs collection switcher can now carry **externally-hosted doc sets** — an entry with an
+  absolute `url` instead of a local slug, rendered as an outbound link (new tab, external icon).
+  Shipped default: the **TigerZF Manual** (the ZF1 reference the framework is built on), which is
+  not installable — TigerZF `export-ignore`s its `documentation/` folder out of the composer dist,
+  so every install links to the hosted copy. Add or override with config
+  `docs.external.<key>.title` / `.url`; clearing a url drops that entry.
+  `Docs_Model_Docs::collectionsForMenu()` assembles the switcher; `collections()` and
+  `collectionSlugs()` are unchanged, so an external entry can never be mistaken for a `/docs/<slug>`
+  segment. The admin help center's "no module help yet" empty state still counts only local
+  collections.
+
+## [1.0.4] — 2026-10-19
+
+### Changed
+- Migrated off the base service's removed `_isAdmin()` to `_isAllowed()` (TIGER-335; needs core
+  1.37.0). Recorded here after the fact — the tag shipped without a changelog entry.
+
 ## [1.0.3] — 2026-09-13
 
 ### Changed
 - AGENTS.md: Step 0 — grep tiger-core/CAPABILITIES.md before building anything; core probably already has it.
-
-## [Unreleased]
 
 ## [1.0.0] — 2026-08-24
 

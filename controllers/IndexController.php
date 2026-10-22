@@ -84,7 +84,10 @@ class Docs_IndexController extends Tiger_Controller_Action
             }
         }
 
-        $this->view->collections = $this->_docs->collections($locale, $vis);   // the dropdown
+        $this->view->collections = $this->_docs->collectionsForMenu($locale, $vis);   // the dropdown
+                                                                   // (collections + external links;
+                                                                   // the URL split above stays on
+                                                                   // collectionSlugs(), see the model)
         $this->view->collection  = $collection;                                // the active one
         $this->view->tree        = $this->_docs->tree($locale, $collection, $base, $vis, Docs_Model_Docs::DEFAULT_COLLECTION);
         $this->view->docsBase    = $base;

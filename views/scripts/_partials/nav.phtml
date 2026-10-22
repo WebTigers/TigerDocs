@@ -6,6 +6,10 @@
  * a client-side filter. Everything is data-driven from the scan-based engine; there's no manifest.
  * Expects: $this->collections, $this->collection (active slug), $this->tree (nested nodes),
  *          $this->docSlug (active page id), $this->docsBase.
+ *
+ * A switcher entry carrying an absolute `url` is an EXTERNALLY-HOSTED doc set (see
+ * Docs_Model_Docs::externalLinks()) — it has no slug, is never the active collection, and opens
+ * in a new tab so the reader doesn't lose their place in this site's docs.
  */
 $collections = $this->collections ?: [];
 $collection  = (string) ($this->collection ?: 'guide');
@@ -18,7 +22,11 @@ $esc         = fn($s) => $this->escape((string) $s);
 // prefix-less collection ('guide' on the public surface, '' in the admin help center → all namespaced).
 $default  = ($this->navDefault !== null) ? (string) $this->navDefault : 'guide';
 $curTitle = 'Documentation';
-foreach ($collections as $c) { if ($c['slug'] === $collection) { $curTitle = $c['title']; } }
+// Only a LOCAL collection can be the active one; an external entry has no slug to match on (and an
+// empty $collection on the admin surface must not accidentally pick one up).
+foreach ($collections as $c) {
+    if (empty($c['url']) && $c['slug'] === $collection) { $curTitle = $c['title']; }
+}
 $colUrl   = fn($slug) => $base . (($default !== '' && $slug === $default) ? '' : '/' . $slug);
 
 /** Render a list of nodes (and their children) recursively into a nested <ul>. */
@@ -47,10 +55,24 @@ $render = function (array $nodes) use (&$render, $active, $esc) {
     </button>
     <ul class="dropdown-menu w-100 shadow">
         <?php foreach ($collections as $c): ?>
+            <?php if (!empty($c['url'])): ?>
+        <li><a class="dropdown-item d-flex align-items-center justify-content-between gap-2" href="<?= $esc($c['url']) ?>" target="_blank" rel="noopener noreferrer">
+            <span class="text-truncate"><?= $esc($c['title']) ?></span>
+            <i class="fa-solid fa-arrow-up-right-from-square small text-body-secondary" aria-hidden="true"></i>
+        </a></li>
+            <?php else: ?>
         <li><a class="dropdown-item<?= $c['slug'] === $collection ? ' active' : '' ?>" href="<?= $esc($colUrl($c['slug'])) ?>"><?= $esc($c['title']) ?></a></li>
+            <?php endif; ?>
         <?php endforeach; ?>
     </ul>
 </div>
+<?php elseif (!empty($collections[0]['url'])): ?>
+<?php /* The only entry is an external doc set — link out rather than to a /docs page that isn't there. */ ?>
+<a href="<?= $esc($collections[0]['url']) ?>" target="_blank" rel="noopener noreferrer"
+   class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-3">
+    <i class="fa-solid fa-book me-2"></i><?= $esc($collections[0]['title']) ?>
+    <i class="fa-solid fa-arrow-up-right-from-square small ms-2 text-body-secondary" aria-hidden="true"></i>
+</a>
 <?php else: ?>
 <a href="<?= $esc($colUrl($collection)) ?>" class="d-inline-flex align-items-center text-decoration-none fw-semibold mb-3">
     <i class="fa-solid fa-book me-2"></i><?= $esc($curTitle) ?>

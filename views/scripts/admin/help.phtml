@@ -10,6 +10,9 @@ $doc         = $this->doc ?? null;
 $tree        = $this->tree ?: [];
 $collections = $this->collections ?: [];
 $collection  = (string) ($this->collection ?: '');
+// The switcher also carries externally-hosted doc sets (the TigerZF manual). "No module help yet"
+// is about what IS installed here, so the empty state counts only local collections.
+$localColls  = array_values(array_filter($collections, static fn($c) => empty($c['url'])));
 $base        = (string) ($this->docsBase ?: '/docs/admin/help');
 $headings    = $doc['headings'] ?? [];
 $assets      = '/_modules/docs';
@@ -30,7 +33,7 @@ $ph          = 'Search help…';
     </div>
 </div>
 
-<?php if (!$collections): ?>
+<?php if (!$localColls): ?>
 <div class="card"><div class="card-body text-body-secondary">
     <i class="fa-regular fa-circle-question me-2"></i>No module help yet. A module appears here when it ships admin docs — a
     <code>docs/</code> folder with <code>visibility: admin</code> files. See
