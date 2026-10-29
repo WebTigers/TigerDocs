@@ -30,6 +30,14 @@ class Docs_IndexController extends Tiger_Controller_Action
     {
         parent::init();
         $this->_docs = new Docs_Model_Docs();
+
+        // Published content version, into the head registry the layout already renders. A fleet
+        // serving old docs is otherwise invisible — this makes it one curl away:
+        //   curl -s https://example.com/docs | grep tiger-docs-version
+        $version = $this->_docs->contentVersion();
+        if ($version !== '') {
+            $this->view->headMeta()->appendName('tiger-docs-version', $version);
+        }
     }
 
     /**

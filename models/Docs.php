@@ -70,6 +70,9 @@ class Docs_Model_Docs
     /** Per-request memo of collection sources, per locale. */
     protected static $_sources = [];
 
+    /** @var Docs_Model_Content the published-version resolver (always set; may be disabled). */
+    protected $_content;
+
     /**
      * Resolve the module's content/ directory for the multi-source scan.
      *
@@ -85,7 +88,30 @@ class Docs_Model_Docs
         $cfg = Zend_Registry::isRegistered('Zend_Config') ? Zend_Registry::get('Zend_Config') : null;
         $override = ($cfg && $cfg->get('docs')) ? trim((string) $cfg->get('docs')->get('content_dir')) : '';
         if ($override !== '') { $dir = $override; }
+
+        // A PUBLISHED content source (docs.content_source.url) outranks both: the server converges
+        // on the published version itself instead of depending on something else having copied the
+        // right files onto its disk. Fail-soft — a source that cannot be reached returns null and
+        // we fall through to whatever this server already has.
+        $this->_content = new Docs_Model_Content();
+        $published = $this->_content->resolve();
+        if ($published !== null) { $dir = $published; }
+
         $this->_contentDir = realpath($dir) ?: $dir;
+    }
+
+    /**
+     * The published content version this server is serving — '' when the module reads a local
+     * content dir rather than a published source.
+     *
+     * Surfaced so a stale server is VISIBLE. The whole reason this exists is that a fleet can sit
+     * two hours behind its content and nothing anywhere says so.
+     *
+     * @return string
+     */
+    public function contentVersion()
+    {
+        return $this->_content ? $this->_content->version() : '';
     }
 
     // =====================================================================================

@@ -1,0 +1,32 @@
+name: Content self-test
+
+# Docs_Model_Content decides which published version a server serves. Its failure mode is silent —
+# a resolver quietly serving last week's docs looks exactly like one that is working — so this
+# asserts the version the server lands on in each case, including the ones where the right answer
+# is "don't move": a bad checksum, an origin that has gone away, a server with nothing local.
+#
+# Mutation-checked: removing the checksum verification, or making the resolver ignore the pointer's
+# sha, each make it fail.
+
+on:
+  push:
+    branches: [main]
+    paths: ['models/Content.php', 'bin/content-selftest.php', '.github/workflows/selftest.yml']
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.3', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: zip, curl
+          coverage: none
+      - run: php bin/content-selftest.php

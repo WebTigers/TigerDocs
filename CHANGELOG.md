@@ -6,6 +6,26 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-29
+
+### Added
+- **Published content sources — docs reach a fleet as a release, not as a directory to keep in
+  step.** Set `tiger.docs.content_source.url` and a server reads a small pointer (`current.json`)
+  on a short TTL, fetching the immutable artifact it names only when the sha moves. The new
+  version is unpacked beside the old one and swapped in by renaming a symlink, so a request sees
+  one whole version or the other. Publishing is atomic, a rollback is repointing one file, a
+  checksum mismatch is refused, and an unreachable origin leaves the last good version serving.
+  A server launched after the last publish is correct on its **first request** rather than on
+  whenever something next copies files onto it. Unset, nothing changes.
+- **The content version is in the page** — `<meta name="tiger-docs-version">` on docs pages. A
+  fleet can sit hours behind its content while every server returns 200 and looks healthy; this
+  makes "which version is this box serving" one `curl` away instead of something a person
+  eventually notices by reading the site.
+- `bin/content-selftest.php` + a CI matrix (PHP 8.1/8.3/8.5) covering install, re-publish,
+  rollback, a tampered artifact and a dead origin. Mutation-checked: dropping the checksum
+  verification, or ignoring the pointer's sha, each make it fail.
+
+
 ## [1.1.0] — 2026-10-22
 
 ### Added
