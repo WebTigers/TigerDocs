@@ -9,22 +9,20 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 ## [1.2.0] — 2026-10-29
 
 ### Added
-- **Published content sources — docs reach a fleet as a release, not as a directory to keep in
-  step.** Set `tiger.docs.content_source.url` and a server reads a small pointer (`current.json`)
-  on a short TTL, fetching the immutable artifact it names only when the sha moves. The new
-  version is unpacked beside the old one and swapped in by renaming a symlink, so a request sees
-  one whole version or the other. Publishing is atomic, a rollback is repointing one file, a
-  checksum mismatch is refused, and an unreachable origin leaves the last good version serving.
-  A server launched after the last publish is correct on its **first request** rather than on
-  whenever something next copies files onto it. Unset, nothing changes.
-- **The content version is in the page** — `<meta name="tiger-docs-version">` on docs pages. A
-  fleet can sit hours behind its content while every server returns 200 and looks healthy; this
-  makes "which version is this box serving" one `curl` away instead of something a person
-  eventually notices by reading the site.
-- `bin/content-selftest.php` + a CI matrix (PHP 8.1/8.3/8.5) covering install, re-publish,
-  rollback, a tampered artifact and a dead origin. Mutation-checked: dropping the checksum
-  verification, or ignoring the pointer's sha, each make it fail.
-
+- **Content modules — the manual lives in its own repo, and a release of it updates every
+  install.** A module declaring `provides.content` in its manifest supplies documentation (every
+  collection, every locale) and TigerDocs renders it ahead of the content it ships itself. The
+  content module carries no PHP, no routes and no migrations; it inherits what every module
+  already has — a version, a release, a registry row, update checks, auto-update opt-in, and a
+  rollback that is installing the previous release.
+- Content roots now resolve **highest-priority first and additively**: `docs.content_dir`, then
+  active `provides.content` modules by slug, then this module's own `content/`. A collection
+  present in several roots merges and the higher root wins a same-id page, so a content module can
+  replace the whole manual, add one collection, or override a single page. Locale still falls back
+  to `en` within each root.
+- `<meta name="tiger-docs-version">` on docs pages, naming the content module and its version. A
+  fleet can sit a long way behind its manual while every server returns 200 and looks healthy;
+  this makes "which version is this box serving" answerable from outside.
 
 ## [1.1.0] — 2026-10-22
 

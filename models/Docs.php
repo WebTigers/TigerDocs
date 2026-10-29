@@ -70,48 +70,109 @@ class Docs_Model_Docs
     /** Per-request memo of collection sources, per locale. */
     protected static $_sources = [];
 
-    /** @var Docs_Model_Content the published-version resolver (always set; may be disabled). */
-    protected $_content;
+    /** @var string[] every content root, highest priority first (see __construct). */
+    protected $_contentRoots = [];
 
     /**
-     * Resolve the module's content/ directory for the multi-source scan.
+     * Resolve the CONTENT ROOTS for the multi-source scan, highest priority first.
+     *
+     * Content is not the docs module's property. A CONTENT MODULE — one declaring
+     * `provides.content` in its manifest, shipping nothing but `content/<locale>/<collection>/`
+     * — supplies the manual, every locale of it, and overrides what this module ships. That is
+     * the whole point: the manual lives in one repo, under version control, released and updated
+     * like any other module, instead of being copied onto each server by something outside Tiger.
+     *
+     * Priority:
+     *   1. `docs.content_dir` — an operator naming a directory outright. Still wins; it is the
+     *      deliberate local override.
+     *   2. ACTIVE modules declaring `provides.content`, by slug — the manual.
+     *   3. This module's own `content/` — the shipped default, and the floor a bare install
+     *      renders from.
+     *
+     * Roots are ADDITIVE and ordered: a collection present in several roots merges, and the
+     * higher-priority root wins a same-id page. So a content module can replace the whole manual,
+     * add one collection to it, or override a single page, without this module knowing which.
      *
      * @return void
      */
     public function __construct()
     {
-        // The content dir is config-overridable via `docs.content_dir` so the private docs content can
-        // be sourced EXTERNALLY (e.g. synced from S3 on each instance) rather than baked into the
-        // module — decoupling content from code for a stateless fleet. Falls back to the module's own
-        // content/ dir (fresh install / no external source).
-        $dir = dirname(__DIR__) . '/content';
-        $cfg = Zend_Registry::isRegistered('Zend_Config') ? Zend_Registry::get('Zend_Config') : null;
+        $roots = [];
+
+        $cfg      = Zend_Registry::isRegistered('Zend_Config') ? Zend_Registry::get('Zend_Config') : null;
         $override = ($cfg && $cfg->get('docs')) ? trim((string) $cfg->get('docs')->get('content_dir')) : '';
-        if ($override !== '') { $dir = $override; }
+        if ($override !== '') { $roots[] = $override; }
 
-        // A PUBLISHED content source (docs.content_source.url) outranks both: the server converges
-        // on the published version itself instead of depending on something else having copied the
-        // right files onto its disk. Fail-soft — a source that cannot be reached returns null and
-        // we fall through to whatever this server already has.
-        $this->_content = new Docs_Model_Content();
-        $published = $this->_content->resolve();
-        if ($published !== null) { $dir = $published; }
+        foreach ($this->_contentModuleRoots() as $dir) { $roots[] = $dir; }
 
-        $this->_contentDir = realpath($dir) ?: $dir;
+        $roots[] = dirname(__DIR__) . '/content';
+
+        $real = [];
+        foreach ($roots as $dir) {
+            $r = realpath($dir);
+            if ($r !== false && is_dir($r) && !in_array($r, $real, true)) { $real[] = $r; }
+        }
+        // A bare install with no content anywhere still needs a base path to reason from.
+        if (!$real) { $real = [dirname(__DIR__) . '/content']; }
+
+        $this->_contentRoots = $real;
+        $this->_contentDir   = $real[0];   // the primary root (paths are derived from it)
     }
 
     /**
-     * The published content version this server is serving — '' when the module reads a local
-     * content dir rather than a published source.
+     * Content directories supplied by ACTIVE modules that declare `provides.content`.
      *
-     * Surfaced so a stale server is VISIBLE. The whole reason this exists is that a fleet can sit
-     * two hours behind its content and nothing anywhere says so.
+     * Mirrors _moduleDocsRoots(), which already does this for a module's `docs/` folder — the
+     * difference is that `docs/` makes a module its OWN collection (how a module documents
+     * itself), while `content/` contributes to the platform collections (how the manual is
+     * supplied). Deactivate the module and its content is gone, same as its docs.
+     *
+     * @return array<string,string> slug => absolute content dir, ordered by slug
+     */
+    protected function _contentModuleRoots()
+    {
+        $out = [];
+        try {
+            $inactive = array_flip((new Tiger_Model_Module())->inactiveSlugs());
+        } catch (Throwable $e) {
+            $inactive = [];   // no DB/table yet → treat all discovered modules as active
+        }
+        foreach (Tiger_Module_Discovery::all() as $slug => $m) {
+            if ($slug === 'docs' || isset($inactive[$slug])) { continue; }
+            $rel = isset($m['provides']['content']) ? trim((string) $m['provides']['content'], '/') : '';
+            if ($rel === '' || strpos($rel, '..') !== false) { continue; }
+            $base = ($m['area'] === 'app' && defined('APPLICATION_PATH')) ? APPLICATION_PATH
+                  : (defined('TIGER_CORE_PATH') ? TIGER_CORE_PATH : null);
+            if ($base === null) { continue; }
+            $dir = $base . '/modules/' . $slug . '/' . $rel;
+            if (is_dir($dir)) { $out[$slug] = $dir; }
+        }
+        ksort($out);
+        return $out;
+    }
+
+    /**
+     * The content module supplying the manual, as `<slug> <version>` — '' when the docs module is
+     * rendering its own shipped content.
+     *
+     * Emitted as a meta tag by the docs controller. A fleet can sit a long way behind its manual
+     * while every server returns 200 and looks healthy; this is what makes "which version is this
+     * box serving" answerable from outside.
      *
      * @return string
      */
     public function contentVersion()
     {
-        return $this->_content ? $this->_content->version() : '';
+        foreach (array_keys($this->_contentModuleRoots()) as $slug) {
+            try {
+                $m = Tiger_Module_Discovery::all()[$slug] ?? null;
+            } catch (Throwable $e) {
+                return $slug;
+            }
+            $v = is_array($m) ? trim((string) ($m['version'] ?? '')) : '';
+            return $v !== '' ? $slug . ' ' . $v : $slug;
+        }
+        return '';
     }
 
     // =====================================================================================
@@ -316,12 +377,25 @@ class Docs_Model_Docs
         $gen   = $this->_generatedRoot();
         $bases = [];   // slug => ['dirs' => [...hand-written, priority high→low...], 'source' => …]
 
-        // 1) Platform collections — subfolders of content/en (canonical) ∪ content/<locale>.
-        foreach ($this->_subfolders([$this->_contentDir . '/en', $this->_contentDir . '/' . $locale]) as $slug) {
-            $bases[$slug] = [
-                'dirs'   => [$this->_contentDir . '/' . $locale . '/' . $slug, $this->_contentDir . '/en/' . $slug],
-                'source' => 'platform',
-            ];
+        // 1) Platform collections — subfolders of <root>/en (canonical) ∪ <root>/<locale>, across
+        //    EVERY content root. Roots are priority-ordered, so a content module's page wins over
+        //    the same id further down, and a collection present in several roots merges.
+        $probe = [];
+        foreach ($this->_contentRoots as $root) {
+            foreach ([$root . '/en', $root . '/' . $locale] as $d) {
+                if (!in_array($d, $probe, true)) { $probe[] = $d; }
+            }
+        }
+        foreach ($this->_subfolders($probe) as $slug) {
+            $dirs = [];
+            foreach ($this->_contentRoots as $root) {
+                // For `en` the locale dir IS the canonical dir — listing it twice only doubles the
+                // fingerprint walk.
+                foreach ([$root . '/' . $locale . '/' . $slug, $root . '/en/' . $slug] as $d) {
+                    if (!in_array($d, $dirs, true)) { $dirs[] = $d; }
+                }
+            }
+            $bases[$slug] = ['dirs' => $dirs, 'source' => 'platform'];
         }
 
         // 2) Module collections — each active module that ships a docs/ folder (platform slug wins).
