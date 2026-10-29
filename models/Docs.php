@@ -152,18 +152,25 @@ class Docs_Model_Docs
     }
 
     /**
-     * The content module supplying the manual, as `<slug> <version>` — '' when the docs module is
-     * rendering its own shipped content.
+     * What is ACTUALLY supplying the manual, as `<slug> <version>` for a content module, or
+     * `dir:<path>` when a `docs.content_dir` is set, or '' when this module's own content is it.
      *
-     * Emitted as a meta tag by the docs controller. A fleet can sit a long way behind its manual
-     * while every server returns 200 and looks healthy; this is what makes "which version is this
-     * box serving" answerable from outside.
+     * Emitted as a meta tag by the docs controller. It reports the WINNING root rather than "a
+     * content module is installed", because those differ exactly when it matters: a leftover
+     * `docs.content_dir` outranks the module, and a tag that named the module anyway would
+     * cheerfully claim a version the page is not being rendered from. The whole reason this exists
+     * is that a fleet can sit a long way behind its manual while every server returns 200 — a
+     * label that can lie is worse than no label.
      *
      * @return string
      */
     public function contentVersion()
     {
-        foreach (array_keys($this->_contentModuleRoots()) as $slug) {
+        $primary = $this->_contentRoots[0] ?? '';
+        if ($primary === '') { return ''; }
+
+        foreach ($this->_contentModuleRoots() as $slug => $dir) {
+            if (realpath($dir) !== $primary) { continue; }
             try {
                 $m = Tiger_Module_Discovery::all()[$slug] ?? null;
             } catch (Throwable $e) {
@@ -172,7 +179,9 @@ class Docs_Model_Docs
             $v = is_array($m) ? trim((string) ($m['version'] ?? '')) : '';
             return $v !== '' ? $slug . ' ' . $v : $slug;
         }
-        return '';
+
+        // Not a content module. Either an operator's content_dir, or our own shipped content.
+        return $primary === realpath(dirname(__DIR__) . '/content') ? '' : 'dir:' . $primary;
     }
 
     // =====================================================================================

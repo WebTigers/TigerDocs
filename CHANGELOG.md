@@ -20,9 +20,13 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
   present in several roots merges and the higher root wins a same-id page, so a content module can
   replace the whole manual, add one collection, or override a single page. Locale still falls back
   to `en` within each root.
-- `<meta name="tiger-docs-version">` on docs pages, naming the content module and its version. A
-  fleet can sit a long way behind its manual while every server returns 200 and looks healthy;
-  this makes "which version is this box serving" answerable from outside.
+- `<meta name="tiger-docs-version">` on docs pages, naming what is ACTUALLY supplying the manual:
+  `<slug> <version>` for a content module, `dir:<path>` when a `docs.content_dir` is shadowing it,
+  empty when the docs module's own content is rendering. It reports the winning root rather than
+  "a content module is installed", because those differ exactly when it matters — a leftover
+  `content_dir` outranks the module, and a tag that named the module anyway would claim a version
+  the page is not rendered from. A fleet can sit a long way behind its manual while every server
+  returns 200; a label that can lie is worse than no label.
 
 ## [1.1.0] — 2026-10-22
 
