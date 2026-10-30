@@ -1,0 +1,600 @@
+<?php
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 WebTigers. Tiger™ and WebTigers™ are trademarks of WebTigers.
+/**
+ * Docs_Model_Remote — fetch the docs content from a single remote source of truth.
+ *
+ * The problem this solves: content that ships *inside* something — a module release, a machine
+ * image — can only change by rebuilding that thing. A manual is content, not code, so a typo fix
+ * should not need an AMI bake, and a fleet of nodes should not be able to sit on different
+ * versions of the same page while every one of them returns 200.
+ *
+ * So the content lives at ONE path (an S3 prefix, optionally behind a CDN) and every node fetches
+ * from it. There is no versioning at the source, no per-node build step, and no coordination
+ * between nodes: each one independently mirrors the same prefix into its own `var/docs-remote`,
+ * which is then just another content root for the ordinary scan (see Docs_Model_Docs). The
+ * fingerprint cache notices the changed files and rebuilds itself, so a fetch needs no cache
+ * wiring at all.
+ *
+ * How a fetch works — one HTTP request when nothing has changed:
+ *   1. GET `<base>/index.json` — the manifest: every content file with its sha256 and size.
+ *   2. Compare it against the manifest the last successful fetch left behind.
+ *   3. GET only the files whose hash differs (in parallel), verify each against the manifest,
+ *      write it to a temp file and rename it into place — so a reader never sees a partial file.
+ *   4. Remove local files the manifest no longer lists, then write the manifest last: an
+ *      interrupted fetch leaves the old manifest, so the next run simply redoes the work.
+ *
+ * A manifest instead of a directory listing is what keeps this credential-free: listing an S3
+ * prefix needs `s3:ListBucket`, while reading a published index needs nothing but the URL. That
+ * is also what lets the same code serve an install that has no AWS account at all.
+ *
+ * Fetching is NEVER done on a page render — it is network I/O, and a doc page must not wait on
+ * it. The triggers are the scheduled job, the admin button, and `bin/fetch-content.php` at
+ * deploy. Until the first fetch lands, the lower content roots (a content module, this module's
+ * own `content/`) still serve, so a cold node is never blank.
+ *
+ * @api
+ */
+class Docs_Model_Remote
+{
+    /** The published index of the source, relative to the base URL. */
+    const MANIFEST = 'index.json';
+
+    /** The manifest the last successful fetch left in the mirror (hidden from the content scan). */
+    const LOCAL_MANIFEST = '.manifest.json';
+
+    /**
+     * Extensions a fetch will install. Deliberately EXCLUDES `phtml` and `php`: TigerDocs renders
+     * a `.phtml` doc as trusted code, so accepting one from a network source would turn a write to
+     * the bucket into remote code execution on every node in the fleet. Executable content stays
+     * something that only arrives through a release.
+     */
+    const ALLOWED_EXT = ['md', 'markdown', 'html', 'htm', 'json', 'txt', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp'];
+
+    /** Caps, so a hostile or broken manifest cannot fill the disk. */
+    const MAX_FILE  = 4194304;      // 4 MB per file
+    const MAX_TOTAL = 268435456;    // 256 MB per fetch
+    const MAX_FILES = 20000;
+
+    /** Parallel downloads per round — enough to make a cold fetch quick, few enough to be polite. */
+    const CONCURRENCY = 12;
+
+    /** @var array<string,array>|null memo of the last-read local manifest */
+    protected $_local;
+
+    // =============================================================================================
+    //  Where it reads from, and writes to
+    // =============================================================================================
+
+    /**
+     * The base URL of the content source, without a trailing slash, or '' when unconfigured.
+     *
+     * Unset means the remote tier is simply absent — every existing install keeps resolving
+     * content exactly as before, so turning this on is a deliberate act rather than a surprise
+     * in an update.
+     *
+     * @return string the base URL, or '' when no remote source is configured
+     */
+    public function baseUrl()
+    {
+        $url = trim((string) $this->_cfg('content_url', ''));
+        if ($url === '') { return ''; }
+
+        // https only. A content tree fetched over plain http can be rewritten in flight, and the
+        // files it carries are rendered into every page of the docs site.
+        if (stripos($url, 'https://') !== 0) { return ''; }
+
+        return rtrim($url, '/');
+    }
+
+    /** Is a remote content source configured? @return bool */
+    public function isEnabled()
+    {
+        return $this->baseUrl() !== '';
+    }
+
+    /**
+     * The local mirror directory — an app-root build area, never committed, safe to delete.
+     *
+     * Sits beside `var/docs-generated` and `var/docs-llms` for the same reason they do: it is a
+     * regenerable artifact of this one server, and on a cPanel account `var/` is the dependable
+     * writable path (see Docs_Model_Index::_cacheDir for why we never use the system temp dir).
+     *
+     * @return string the absolute mirror path
+     */
+    public function dir()
+    {
+        $dir = trim((string) $this->_cfg('content_mirror', ''));
+        if ($dir !== '') { return rtrim($dir, '/'); }
+
+        $base = defined('APPLICATION_PATH') ? dirname(APPLICATION_PATH) : dirname(__DIR__, 4);
+        return $base . '/var/docs-remote';
+    }
+
+    /**
+     * The mirror path, but only once it actually holds content — what Docs_Model_Docs adds as a
+     * content root.
+     *
+     * A mirror that exists but is empty (a fetch that has never succeeded) must NOT become the
+     * primary root, or it would shadow the content module underneath it with nothing. Returning ''
+     * leaves the lower roots in charge, which is the floor a cold node renders from.
+     *
+     * @return string the mirror path when it holds content, else ''
+     */
+    public function contentRoot()
+    {
+        if (!$this->isEnabled()) { return ''; }
+
+        $dir = $this->dir();
+        if (!is_dir($dir)) { return ''; }
+
+        $m = $this->localManifest();
+        return !empty($m['files']) ? $dir : '';
+    }
+
+    // =============================================================================================
+    //  Status
+    // =============================================================================================
+
+    /**
+     * What this server currently holds, for the admin screen and the content-version tag.
+     *
+     * @return array ['enabled','url','dir','files','bytes','generated','synced_at','error']
+     */
+    public function status()
+    {
+        $m = $this->localManifest();
+
+        return [
+            'enabled'   => $this->isEnabled(),
+            'url'       => $this->baseUrl(),
+            'dir'       => $this->dir(),
+            'files'     => count($m['files'] ?? []),
+            'bytes'     => (int) ($m['bytes'] ?? 0),
+            'generated' => (string) ($m['generated'] ?? ''),
+            'synced_at' => (int) ($m['synced_at'] ?? 0),
+            'error'     => (string) ($m['error'] ?? ''),
+        ];
+    }
+
+    /**
+     * The manifest the last successful fetch recorded, or an empty array.
+     *
+     * @return array the stored manifest
+     */
+    public function localManifest()
+    {
+        if ($this->_local !== null) { return $this->_local; }
+
+        $path = $this->dir() . '/' . self::LOCAL_MANIFEST;
+        if (!is_file($path)) { return $this->_local = []; }
+
+        $data = json_decode((string) @file_get_contents($path), true);
+        return $this->_local = is_array($data) ? $data : [];
+    }
+
+    /**
+     * A short, honest label for what this server is serving — emitted as the content-version meta
+     * tag so a page can never claim a version it is not rendering from.
+     *
+     * @return string e.g. `remote 2026-10-30T18:04:11Z`, or 'remote' with no stamp
+     */
+    public function version()
+    {
+        $m   = $this->localManifest();
+        $gen = trim((string) ($m['generated'] ?? ''));
+        return $gen !== '' ? 'remote ' . $gen : 'remote';
+    }
+
+    // =============================================================================================
+    //  The fetch
+    // =============================================================================================
+
+    /**
+     * The scheduled-job entry point. Throws on failure so the scheduler records it as a failed run
+     * (and can email) rather than logging a silent success.
+     *
+     * @return void
+     * @throws RuntimeException when the fetch fails
+     */
+    public static function syncJob()
+    {
+        $self = new self();
+        if (!$self->isEnabled()) { return; }   // not configured on this install — nothing to do
+
+        $res = $self->sync();
+        if (!empty($res['error'])) {
+            throw new RuntimeException('Docs content fetch failed: ' . $res['error']);
+        }
+    }
+
+    /**
+     * Mirror the remote content into the local directory.
+     *
+     * Safe to call concurrently: a lock file makes a second caller (the admin button landing on top
+     * of the cron tick) return `busy` instead of fighting over the same files.
+     *
+     * @param  bool  $force fetch every file even when its hash already matches
+     * @return array ['ok','changed','removed','files','bytes','generated','busy','error']
+     */
+    public function sync($force = false)
+    {
+        $out = ['ok' => false, 'changed' => 0, 'removed' => 0, 'files' => 0, 'bytes' => 0,
+                'generated' => '', 'busy' => false, 'error' => ''];
+
+        $base = $this->baseUrl();
+        if ($base === '') {
+            $out['error'] = 'No remote content source is configured.';
+            return $out;
+        }
+
+        $dir = $this->dir();
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            $out['error'] = 'The content mirror directory is not writable: ' . $dir;
+            return $out;
+        }
+
+        $lock = @fopen($dir . '/.lock', 'c');
+        if (!$lock) {
+            $out['error'] = 'Could not open the fetch lock.';
+            return $out;
+        }
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            fclose($lock);
+            $out['busy'] = true;
+            $out['error'] = 'A fetch is already running.';
+            return $out;
+        }
+
+        try {
+            $out = $this->_sync($base, $dir, (bool) $force) + $out;
+        } catch (Throwable $e) {
+            $out['error'] = $e->getMessage();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+
+        if ($out['error'] !== '') {
+            $this->_log('docs.remote.failed', ['url' => $base, 'error' => $out['error']]);
+        } else {
+            $this->_log('docs.remote.synced', [
+                'url'     => $base,
+                'changed' => $out['changed'],
+                'removed' => $out['removed'],
+                'files'   => $out['files'],
+            ]);
+        }
+
+        return $out;
+    }
+
+    /** The fetch proper, inside the lock. */
+    protected function _sync($base, $dir, $force)
+    {
+        // 1) The manifest. This is the only request a no-op fetch makes.
+        $raw = $this->_get($base . '/' . self::MANIFEST, 20);
+        if ($raw === null) {
+            throw new RuntimeException('Could not read ' . self::MANIFEST . ' from the content source.');
+        }
+
+        $manifest = json_decode($raw, true);
+        if (!is_array($manifest) || !isset($manifest['files']) || !is_array($manifest['files'])) {
+            throw new RuntimeException(self::MANIFEST . ' is not a content manifest.');
+        }
+
+        $want = $this->_normalize($manifest['files']);
+        if (!$want) {
+            throw new RuntimeException(self::MANIFEST . ' lists no usable content files.');
+        }
+
+        // 2) What has changed since the last successful fetch. A hash that matches is skipped
+        //    without touching the file, so an unchanged tree keeps its mtimes and the index cache
+        //    is not needlessly invalidated.
+        $have    = $this->_normalize(($this->localManifest()['files'] ?? []));
+        $fetch   = [];
+        $bytes   = 0;
+        foreach ($want as $rel => $meta) {
+            $bytes += $meta['size'];
+            $local  = $dir . '/' . $rel;
+            $same   = !$force
+                   && isset($have[$rel])
+                   && $have[$rel]['sha256'] === $meta['sha256']
+                   && is_file($local)
+                   && filesize($local) === $meta['size'];
+            if (!$same) { $fetch[$rel] = $meta; }
+        }
+        if ($bytes > self::MAX_TOTAL) {
+            throw new RuntimeException('The content manifest totals ' . $bytes . ' bytes, over the limit.');
+        }
+
+        // 3) Download the changed files, verify, install.
+        $changed = $this->_download($base, $dir, $fetch);
+
+        // 4) Drop what the manifest no longer lists, then prune the dirs it emptied.
+        $removed = $this->_prune($dir, $want);
+
+        // 5) The manifest last: it is the record that all of the above succeeded.
+        $this->_local = [
+            'generated' => (string) ($manifest['generated'] ?? ''),
+            'synced_at' => time(),
+            'files'     => $want,
+            'bytes'     => $bytes,
+            'error'     => '',
+        ];
+        if (@file_put_contents($dir . '/' . self::LOCAL_MANIFEST, json_encode($this->_local)) === false) {
+            throw new RuntimeException('Could not write the local manifest.');
+        }
+
+        return [
+            'ok'        => true,
+            'changed'   => $changed,
+            'removed'   => $removed,
+            'files'     => count($want),
+            'bytes'     => $bytes,
+            'generated' => (string) ($manifest['generated'] ?? ''),
+            'busy'      => false,
+            'error'     => '',
+        ];
+    }
+
+    /**
+     * Validate + normalize a manifest's file map to `rel => ['sha256','size']`.
+     *
+     * Every path is checked here rather than at download time, because this is the one place a
+     * remote party chooses a local filename. Anything suspicious is dropped rather than repaired:
+     * a manifest that wants to write outside the mirror is not a manifest we want to be clever
+     * about.
+     */
+    protected function _normalize(array $files)
+    {
+        $out = [];
+        foreach ($files as $rel => $meta) {
+            if (count($out) >= self::MAX_FILES) { break; }
+
+            $rel = $this->_safePath((string) $rel);
+            if ($rel === '') { continue; }
+
+            // Tolerate the compact form (`"path": "<sha256>"`) alongside the full one.
+            $sha  = is_array($meta) ? (string) ($meta['sha256'] ?? '') : (string) $meta;
+            $size = is_array($meta) ? (int) ($meta['size'] ?? 0) : 0;
+
+            if (!preg_match('/^[a-f0-9]{64}$/', $sha)) { continue; }
+            if ($size < 0 || $size > self::MAX_FILE) { continue; }
+
+            $out[$rel] = ['sha256' => $sha, 'size' => $size];
+        }
+        ksort($out);
+        return $out;
+    }
+
+    /**
+     * A manifest path reduced to something safe to write under the mirror, or '' to refuse it.
+     *
+     * @param  string $rel the path as the manifest gave it
+     * @return string the safe relative path, or '' when it must be refused
+     */
+    protected function _safePath($rel)
+    {
+        $rel = str_replace('\\', '/', trim($rel));
+
+        if ($rel === '' || strlen($rel) > 400) { return ''; }
+        if ($rel[0] === '/') { return ''; }           // refuse an absolute path outright rather
+                                                      // than quietly reinterpreting it as relative
+        if (strpos($rel, '..') !== false) { return ''; }
+        if (strpos($rel, "\0") !== false) { return ''; }
+
+        // Each segment: plain and visible, and may start with an underscore — `_index.md` is the
+        // engine's own collection-index file (it carries a collection's title and visibility), so
+        // refusing a leading underscore silently strips every collection's metadata.
+        foreach (explode('/', $rel) as $seg) {
+            if (!preg_match('/^[A-Za-z0-9_][A-Za-z0-9._-]*$/', $seg)) { return ''; }
+        }
+
+        $ext = strtolower((string) pathinfo($rel, PATHINFO_EXTENSION));
+        if (!in_array($ext, self::ALLOWED_EXT, true)) { return ''; }
+
+        return $rel;
+    }
+
+    /**
+     * Download + install each wanted file. Returns how many were installed.
+     *
+     * A file whose bytes do not match the manifest's hash is refused — the hash is the only reason
+     * to trust what came back, and a CDN serving a stale or truncated object is the ordinary case
+     * this catches.
+     */
+    protected function _download($base, $dir, array $fetch)
+    {
+        if (!$fetch) { return 0; }
+
+        $installed = 0;
+        foreach (array_chunk($fetch, self::CONCURRENCY, true) as $batch) {
+            $urls = [];
+            foreach ($batch as $rel => $meta) {
+                $urls[$rel] = $base . '/' . $this->_encodePath($rel);
+            }
+
+            foreach ($this->_getMany($urls) as $rel => $body) {
+                if ($body === null) {
+                    throw new RuntimeException('Could not fetch ' . $rel . ' from the content source.');
+                }
+                $meta = $batch[$rel];
+                if (hash('sha256', $body) !== $meta['sha256']) {
+                    throw new RuntimeException('Hash mismatch for ' . $rel . ' — refusing to install it.');
+                }
+                if (!$this->_install($dir, $rel, $body)) {
+                    throw new RuntimeException('Could not write ' . $rel . ' into the content mirror.');
+                }
+                $installed++;
+            }
+        }
+
+        return $installed;
+    }
+
+    /** Write one file into the mirror via a temp file + rename, so a reader never sees it partial. */
+    protected function _install($dir, $rel, $body)
+    {
+        $path = $dir . '/' . $rel;
+        $sub  = dirname($path);
+        if (!is_dir($sub) && !@mkdir($sub, 0775, true) && !is_dir($sub)) { return false; }
+
+        $tmp = $path . '.part';
+        if (@file_put_contents($tmp, $body) === false) { return false; }
+        if (!@rename($tmp, $path)) { @unlink($tmp); return false; }
+        @chmod($path, 0664);
+
+        return true;
+    }
+
+    /**
+     * Delete mirrored files the manifest no longer lists, and the directories that leaves empty.
+     * Returns how many files were removed.
+     */
+    protected function _prune($dir, array $want)
+    {
+        $removed = 0;
+        $dirs    = [];
+
+        $it = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($it as $file) {
+            $rel = ltrim(substr($file->getPathname(), strlen($dir)), '/');
+            if ($file->isDir()) { $dirs[] = $file->getPathname(); continue; }
+            if ($rel === self::LOCAL_MANIFEST || $rel === '.lock') { continue; }
+            if (isset($want[$rel])) { continue; }
+            if (@unlink($file->getPathname())) { $removed++; }
+        }
+        foreach ($dirs as $d) { @rmdir($d); }   // only succeeds when empty
+
+        return $removed;
+    }
+
+    // =============================================================================================
+    //  HTTP
+    // =============================================================================================
+
+    /** Percent-encode each path segment, leaving the separators alone. */
+    protected function _encodePath($rel)
+    {
+        return implode('/', array_map('rawurlencode', explode('/', $rel)));
+    }
+
+    /**
+     * GET one URL. Returns the body, or null on any failure (including a non-2xx).
+     *
+     * @param  string  $url
+     * @param  int     $timeout seconds
+     * @return ?string the body, or null
+     */
+    protected function _get($url, $timeout = 30)
+    {
+        if (!function_exists('curl_init')) {
+            $body = @file_get_contents($url);
+            return $body === false ? null : $body;
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, $this->_curlOpts($timeout));
+        $body = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        unset($ch);   // no curl_close(): a no-op since PHP 8.0, deprecated in 8.5
+
+        return ($body === false || $code < 200 || $code > 299) ? null : (string) $body;
+    }
+
+    /**
+     * GET several URLs at once. Returns `key => body|null`, in the order given.
+     *
+     * A cold node fetches the whole tree, so this is the difference between a fetch that takes a
+     * couple of seconds and one that takes minutes.
+     *
+     * @param  array<string,string> $urls key => URL
+     * @return array<string,?string> key => body, or null for a failure
+     */
+    protected function _getMany(array $urls)
+    {
+        if (!function_exists('curl_multi_init')) {
+            $out = [];
+            foreach ($urls as $k => $u) { $out[$k] = $this->_get($u); }
+            return $out;
+        }
+
+        $mh      = curl_multi_init();
+        $handles = [];
+        foreach ($urls as $key => $url) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, $this->_curlOpts(60) + [CURLOPT_RETURNTRANSFER => true]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$key] = $ch;
+        }
+
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) { curl_multi_select($mh, 1.0); }
+        } while ($running && $status === CURLM_OK);
+
+        $out = [];
+        foreach ($handles as $key => $ch) {
+            $body = curl_multi_getcontent($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $out[$key] = ($body === null || $body === false || $code < 200 || $code > 299) ? null : (string) $body;
+            curl_multi_remove_handle($mh, $ch);
+        }
+        curl_multi_close($mh);
+
+        return $out;
+    }
+
+    /** The shared cURL options for every content request. */
+    protected function _curlOpts($timeout)
+    {
+        return [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 3,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT        => (int) $timeout,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_USERAGENT      => 'TigerDocs',
+            CURLOPT_ENCODING       => '',   // accept gzip — markdown compresses well
+        ];
+    }
+
+    // =============================================================================================
+    //  Config + logging (tolerant of an early/partial boot)
+    // =============================================================================================
+
+    /** Read `tiger.docs.<path>` then `docs.<path>` from the config cascade. */
+    protected function _cfg($path, $default)
+    {
+        try {
+            $cfg = Zend_Registry::get('Zend_Config');
+        } catch (Throwable $e) {
+            return $default;
+        }
+        foreach (['tiger.docs.' . $path, 'docs.' . $path] as $full) {
+            $node = $cfg;
+            foreach (explode('.', $full) as $k) {
+                $node = is_object($node) ? ($node->{$k} ?? null) : null;
+                if ($node === null) { break; }
+            }
+            if ($node !== null && !is_object($node)) { return $node; }
+        }
+        return $default;
+    }
+
+    /** Structured log line, never fatal on an install whose logger is not up. */
+    protected function _log($event, array $ctx)
+    {
+        try {
+            if (!class_exists('Tiger_Log')) { return; }
+            if (strpos($event, 'failed') !== false) { Tiger_Log::error($event, $ctx); return; }
+            Tiger_Log::info($event, $ctx);
+        } catch (Throwable $e) { /* logging must never break a fetch */ }
+    }
+}

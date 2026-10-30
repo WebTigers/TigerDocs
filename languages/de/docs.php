@@ -12,6 +12,9 @@ return [
     'docs.settings.saved' => 'Docs-Einstellungen gespeichert.',
     'docs.index.rebuilt'  => 'Dokumentationsindex auf diesem Server neu erstellt.',
     'docs.reference.built' => 'API-Referenz auf diesem Server generiert.',
+    'docs.content.fetched'      => 'Dokumentationsinhalte von der Quelle geladen.',
+    'docs.content.no_source'    => 'Es ist keine Inhaltsquelle konfiguriert.',
+    'docs.content.fetch_failed' => 'Die Dokumentationsinhalte konnten nicht von der Quelle geladen werden.',
 
     // Landing chrome (localized so the docs home follows the language switch).
     'docs.landing.eyebrow' => 'Dokumentation',

@@ -7,7 +7,9 @@
  * Validates Docs_Form_Settings, then writes the public route override to the DB `config`
  * table (scope=global) via Tiger_Model_Config as tiger.routing.override.docs.* — the
  * live-override tier, effective next request, no deploy. Tiger_Routing_Overrides reads exactly
- * these keys. ACL: admin+ (configs/acl.ini).
+ * these keys. The content source URL (`docs.content_url`) is written the same way, for the same
+ * reason: pointing a fleet at a different content path should not need a deploy. ACL: admin+
+ * (configs/acl.ini).
  *
  * @api
  */
@@ -35,6 +37,15 @@ class Docs_Service_Settings extends Tiger_Service_Service
             $cfg->set($g, '', 'tiger.routing.override.docs.enabled', !empty($v['route_enabled']) ? '1' : '0');
             $cfg->set($g, '', 'tiger.routing.override.docs.priority', (string) max(0, (int) $v['route_priority']));
 
+            // The content source. Blank means "no remote source" — forget() rather than storing an
+            // empty string, so the key reads as unset and the lower content roots take over again.
+            $url = rtrim(trim((string) ($v['content_url'] ?? '')), '/');
+            if ($url === '') {
+                $cfg->forget($g, '', 'docs.content_url');
+            } else {
+                $cfg->set($g, '', 'docs.content_url', $url);
+            }
+
             $this->_success([], 'docs.settings.saved', '/docs/admin/settings');
         } catch (Throwable $e) {
             $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
@@ -58,6 +69,43 @@ class Docs_Service_Settings extends Tiger_Service_Service
             $idx    = (new Docs_Model_Docs())->rebuildIndex($locale);
             $count  = count($idx['search'] ?? []);
             $this->_success(['pages' => $count], 'docs.index.rebuilt');
+        } catch (Throwable $e) {
+            $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
+        }
+    }
+
+    /**
+     * Fetch the docs content from the remote source into THIS server's mirror, then refresh the
+     * index so the new pages show at once.
+     *
+     * Per-server, like the index rebuild — the scheduled job keeps every other node current on its
+     * own tick, so this button is for "I just published, show me now" rather than a fleet action.
+     *
+     * @param  array $params the request payload (unused)
+     * @return void          responds via _success/_error with the file + change counts
+     */
+    public function fetchContent(array $params): void
+    {
+        if (!$this->_isAllowed('fetchContent')) { $this->_error('core.api.error.not_allowed'); return; }
+
+        try {
+            $remote = new Docs_Model_Remote();
+            if (!$remote->isEnabled()) { $this->_error('docs.content.no_source'); return; }
+
+            $res = $remote->sync();
+            if ($res['error'] !== '') {
+                $this->_error(APPLICATION_ENV !== 'production' ? $res['error'] : 'docs.content.fetch_failed');
+                return;
+            }
+
+            (new Docs_Model_Docs())->rebuildIndex(defined('LANG') ? LANG : 'en');
+
+            $this->_success([
+                'files'     => (int) $res['files'],
+                'changed'   => (int) $res['changed'],
+                'removed'   => (int) $res['removed'],
+                'generated' => (string) $res['generated'],
+            ], 'docs.content.fetched');
         } catch (Throwable $e) {
             $this->_error(APPLICATION_ENV !== 'production' ? $e->getMessage() : 'core.api.error.general');
         }

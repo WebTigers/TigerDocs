@@ -37,16 +37,20 @@ class Docs_AdminController extends Tiger_Controller_Admin_Action
             'pattern' => 'docs', 'priority' => 100, 'enabled' => true,
         ];
 
+        $remote = new Docs_Model_Remote();
+
         $form = new Docs_Form_Settings();
         $form->populate([
             'route_enabled'  => !empty($o['enabled']) ? 1 : 0,
             'route_pattern'  => (string) ($o['pattern'] ?: 'docs'),
             'route_priority' => (int) ($o['priority'] ?? 100),
+            'content_url'    => $remote->baseUrl(),
         ]);
 
         $this->view->title    = 'Docs Settings — Tiger Admin';
         $this->view->form     = $form;
         $this->view->override = $o;
+        $this->view->remote   = $remote->status();
     }
 
     /**

@@ -11,6 +11,7 @@ $form = $this->form;
 $el = function ($name) use ($form) { return $form->getElement($name); };
 $enabled = !empty($el('route_enabled')->getValue());
 $pattern = (string) $el('route_pattern')->getValue() ?: 'docs';
+$remote  = (array) ($this->remote ?? []);
 ?>
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
@@ -52,6 +53,31 @@ $pattern = (string) $el('route_pattern')->getValue() ?: 'docs';
                             <div class="form-text">Higher wins when two modules' pretty paths overlap. Leave at 100 unless you're deliberately reordering.</div>
                         </div>
                     </fieldset>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header fw-semibold"><i class="fa-solid fa-cloud-arrow-down me-2"></i>Content source</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="docs-content-url">Content URL <span class="text-body-secondary fw-normal">(optional)</span></label>
+                        <?= $el('content_url') ?>
+                        <div class="form-text">One path every server reads the manual from — an S3 prefix or a CDN in front of one. Each server fetches it into its own copy on a schedule, so publishing a page updates the whole fleet with no deploy and no image rebuild. Leave blank to serve the content that ships with the module.</div>
+                    </div>
+                    <?php if (!empty($remote['enabled'])) : ?>
+                        <dl class="row mb-3 small">
+                            <dt class="col-sm-4 fw-semibold">This server holds</dt>
+                            <dd class="col-sm-8"><?= (int) $remote['files'] ?> file<?= (int) $remote['files'] === 1 ? '' : 's' ?></dd>
+                            <dt class="col-sm-4 fw-semibold">Published</dt>
+                            <dd class="col-sm-8"><?= $remote['generated'] !== '' ? $this->escape($remote['generated']) : '<span class="text-body-secondary">never fetched</span>' ?></dd>
+                            <dt class="col-sm-4 fw-semibold">Last fetched</dt>
+                            <dd class="col-sm-8"><?= $remote['synced_at'] ? $this->escape(date('Y-m-d H:i', (int) $remote['synced_at'])) : '<span class="text-body-secondary">—</span>' ?></dd>
+                        </dl>
+                    <?php endif; ?>
+                    <button type="button" id="docs-content-fetch" class="btn btn-outline-secondary"<?= empty($remote['enabled']) ? ' disabled' : '' ?>><i class="fa-solid fa-cloud-arrow-down me-2"></i>Fetch content</button>
+                    <div class="form-text mt-2">Fetches now on <em>this</em> server. The others refresh on their own schedule.</div>
                 </div>
             </div>
         </div>
@@ -127,6 +153,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (msgs.length) { msgs.forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); }); }
                     else if (res && res.result === 1) { TigerDOM.notify(fb, 'Index rebuilt.', { type: 'success' }); }
                     else { TigerDOM.notify(fb, 'Rebuild failed.', { type: 'error' }); }
+                })
+                .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
+        });
+    }
+
+    // Fetch the docs content from the remote source into this server's mirror.
+    var fetchBtn = document.getElementById('docs-content-fetch');
+    if (fetchBtn) {
+        fetchBtn.addEventListener('click', function () {
+            var rd = new URLSearchParams();
+            rd.set('module', 'docs'); rd.set('service', 'settings'); rd.set('method', 'fetchContent');
+            TigerButton.run(this, function () {
+                return fetch('/api', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: rd })
+                    .then(function (r) { return r.json().catch(function () { return {}; }); });
+            })
+                .then(function (res) {
+                    var msgs = (res && res.messages) || [];
+                    if (msgs.length) { msgs.forEach(function (m) { TigerDOM.notify(fb, m.message, { type: m.class }); }); }
+                    else if (res && res.result === 1) { TigerDOM.notify(fb, 'Content fetched.', { type: 'success' }); }
+                    else { TigerDOM.notify(fb, 'Fetch failed.', { type: 'error' }); }
                 })
                 .catch(function () { TigerDOM.notify(fb, 'Network error — please try again.', { type: 'error' }); });
         });

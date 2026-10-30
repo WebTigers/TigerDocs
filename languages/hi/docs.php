@@ -12,6 +12,9 @@ return [
     'docs.settings.saved' => 'Docs सेटिंग्स सहेजी गईं।',
     'docs.index.rebuilt'  => 'इस सर्वर पर दस्तावेज़ सूचकांक पुनर्निर्मित किया गया।',
     'docs.reference.built' => 'इस सर्वर पर API संदर्भ तैयार किया गया।',
+    'docs.content.fetched'      => 'स्रोत से दस्तावेज़ सामग्री प्राप्त की गई।',
+    'docs.content.no_source'    => 'कोई सामग्री स्रोत कॉन्फ़िगर नहीं किया गया है।',
+    'docs.content.fetch_failed' => 'स्रोत से दस्तावेज़ सामग्री प्राप्त नहीं हो सकी।',
 
     // Landing chrome (localized so the docs home follows the language switch).
     'docs.landing.eyebrow' => 'दस्तावेज़ीकरण',

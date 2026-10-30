@@ -35,6 +35,16 @@ class Docs_Form_Settings extends Tiger_Form
                 'validators' => [['Digits']],
                 'attribs'    => array_merge($control, ['id' => 'docs-route-priority', 'inputmode' => 'numeric']),
             ]],
+            // The content source: one URL every server fetches the manual from. Optional — blank
+            // means the shipped/module content serves, which is every ordinary install.
+            // https only, because the files it returns are rendered into every docs page.
+            ['text', 'content_url', [
+                'required'   => false,
+                'allowEmpty' => true,
+                'filters'    => ['StringTrim'],
+                'validators' => [['Regex', true, ['pattern' => '#^https://[A-Za-z0-9.-]+(?::\d+)?(?:/[A-Za-z0-9._~/-]*)?$#', 'messages' => [Zend_Validate_Regex::NOT_MATCH => 'Use an https URL, e.g. https://cdn.example.com/docs.']]]],
+                'attribs'    => array_merge($control, ['id' => 'docs-content-url', 'placeholder' => 'https://cdn.example.com/docs']),
+            ]],
         ];
     }
 }

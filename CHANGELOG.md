@@ -6,6 +6,46 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-30
+
+### Added
+- **A content source every server fetches from, so publishing a page is not a deploy.** Set
+  `docs.content_url` (Settings → Docs → *Content source*) to one published path — an S3 prefix,
+  usually behind a CDN — and every server mirrors it into its own `var/docs-remote`, which then
+  resolves as a content root like any other. Changing the manual becomes a publish; it no longer
+  needs a module release or a machine-image rebuild.
+
+  The mechanics, and why each one is the way it is:
+
+  - **A manifest, not a directory listing.** The source publishes `index.json` — every file with
+    its SHA-256 and size. Reading a published index needs nothing but the URL, while listing an S3
+    prefix needs `s3:ListBucket`, so a fetch is credential-free and works on an install with no
+    cloud account at all. It also means an unchanged fetch is **one HTTP request**, which is what
+    lets the check run every 15 minutes.
+  - **Incremental and verified.** Only files whose hash differs are downloaded; each is checked
+    against the manifest before it is installed, and written via a temp file and a rename so a
+    reader never sees a partial file. Bytes that do not match the manifest are refused, not
+    installed — the hash is the only reason to trust what a CDN returned.
+  - **Never on a page render.** Fetching is network I/O and a doc page must not wait on it. The
+    triggers are the `docs.content_fetch` scheduled job (every 15 minutes), the admin **Fetch
+    content** button, and `bin/fetch-content.php` for a deploy or firstboot hook.
+  - **It steps aside rather than shadowing.** An unconfigured or not-yet-fetched source
+    contributes nothing, so the roots below it — a content module, the module's own `content/` —
+    still serve. A new server is never blank, and a content module installed alongside is the
+    offline floor.
+  - **`contentVersion()` reports `remote <stamp>`**, the publish stamp from the manifest, so a
+    page cannot claim content it is not being rendered from. That is the failure this exists to
+    make visible: in a fleet, one server can sit a long way behind and still answer `200`.
+
+  **Executable content is never fetched.** The accepted types are `.md`, `.html`, `.json`, `.txt`
+  and images — `.phtml` and `.php` are deliberately excluded, because TigerDocs renders a `.phtml`
+  doc as trusted code and accepting one from a network source would turn a write to the bucket into
+  code execution on every server in the fleet. Paths are validated before anything is written: an
+  absolute path, a traversal, a dotfile or an unexpected character is refused rather than repaired.
+
+  The source URL must be `https`. Unset by default, so no existing install changes behaviour.
+
+
 ## [1.2.1] — 2026-10-30
 
 ### Fixed

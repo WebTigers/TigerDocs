@@ -13,6 +13,9 @@ return [
     'docs.settings.saved' => 'Docs settings saved.',
     'docs.index.rebuilt'  => 'Docs index rebuilt on this server.',
     'docs.reference.built' => 'API reference generated on this server.',
+    'docs.content.fetched'      => 'Docs content fetched from the source.',
+    'docs.content.no_source'    => 'No content source is configured.',
+    'docs.content.fetch_failed' => 'Could not fetch the docs content from the source.',
 
     // Landing chrome (localized so the docs home follows the language switch).
     'docs.landing.eyebrow' => 'Documentation',

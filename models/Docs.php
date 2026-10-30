@@ -76,17 +76,22 @@ class Docs_Model_Docs
     /**
      * Resolve the CONTENT ROOTS for the multi-source scan, highest priority first.
      *
-     * Content is not the docs module's property. A CONTENT MODULE — one declaring
-     * `provides.content` in its manifest, shipping nothing but `content/<locale>/<collection>/`
-     * — supplies the manual, every locale of it, and overrides what this module ships. That is
-     * the whole point: the manual lives in one repo, under version control, released and updated
-     * like any other module, instead of being copied onto each server by something outside Tiger.
+     * Content is not the docs module's property. A REMOTE SOURCE (one URL every server fetches
+     * from — see Docs_Model_Remote) or a CONTENT MODULE (one declaring `provides.content` in its
+     * manifest, shipping nothing but `content/<locale>/<collection>/`) supplies the manual, every
+     * locale of it, and overrides what this module ships. That is the whole point: the manual
+     * lives in one place, published once, instead of being copied onto each server by something
+     * outside Tiger.
      *
      * Priority:
      *   1. `docs.content_dir` — an operator naming a directory outright. Still wins; it is the
      *      deliberate local override.
-     *   2. ACTIVE modules declaring `provides.content`, by slug — the manual.
-     *   3. This module's own `content/` — the shipped default, and the floor a bare install
+     *   2. The REMOTE mirror (`docs.content_url` → `var/docs-remote`) — the published source of
+     *      truth, so changing a page is a publish rather than a release or an image rebuild.
+     *      Empty or unfetched, it steps aside rather than shadowing what is below it.
+     *   3. ACTIVE modules declaring `provides.content`, by slug — the manual as a released
+     *      module, which is also the offline floor when a remote fetch has never landed.
+     *   4. This module's own `content/` — the shipped default, and the floor a bare install
      *      renders from.
      *
      * Roots are ADDITIVE and ordered: a collection present in several roots merges, and the
@@ -103,6 +108,9 @@ class Docs_Model_Docs
         $override = ($cfg && $cfg->get('docs')) ? trim((string) $cfg->get('docs')->get('content_dir')) : '';
         if ($override !== '') { $roots[] = $override; }
 
+        $remote = $this->_remoteRoot();
+        if ($remote !== '') { $roots[] = $remote; }
+
         foreach ($this->_contentModuleRoots() as $dir) { $roots[] = $dir; }
 
         $roots[] = dirname(__DIR__) . '/content';
@@ -117,6 +125,24 @@ class Docs_Model_Docs
 
         $this->_contentRoots = $real;
         $this->_contentDir   = $real[0];   // the primary root (paths are derived from it)
+    }
+
+    /**
+     * The local mirror of the remote content source, when one is configured AND has content.
+     *
+     * Guarded rather than trusted: on a Core or an install where the remote model is absent, or
+     * before the first fetch has landed, this contributes nothing and the roots below it serve —
+     * so turning the remote source on can never leave a server with a blank docs site.
+     *
+     * @return string the mirror path, or '' when there is nothing to add
+     */
+    protected function _remoteRoot()
+    {
+        try {
+            return (new Docs_Model_Remote())->contentRoot();
+        } catch (Throwable $e) {
+            return '';
+        }
     }
 
     /**
@@ -152,8 +178,9 @@ class Docs_Model_Docs
     }
 
     /**
-     * What is ACTUALLY supplying the manual, as `<slug> <version>` for a content module, or
-     * `dir:<path>` when a `docs.content_dir` is set, or '' when this module's own content is it.
+     * What is ACTUALLY supplying the manual: `remote <stamp>` for the fetched source, `<slug>
+     * <version>` for a content module, `dir:<path>` when a `docs.content_dir` is set, or '' when
+     * this module's own content is it.
      *
      * Emitted as a meta tag by the docs controller. It reports the WINNING root rather than "a
      * content module is installed", because those differ exactly when it matters: a leftover
@@ -168,6 +195,14 @@ class Docs_Model_Docs
     {
         $primary = $this->_contentRoots[0] ?? '';
         if ($primary === '') { return ''; }
+
+        // The remote mirror, reported with the stamp the publish put in the manifest — the one
+        // thing that tells an operator whether a node has actually picked a content change up.
+        try {
+            $remote = new Docs_Model_Remote();
+            $root   = $remote->contentRoot();
+            if ($root !== '' && realpath($root) === $primary) { return $remote->version(); }
+        } catch (Throwable $e) { /* fall through to the file tiers */ }
 
         foreach ($this->_contentModuleRoots() as $slug => $dir) {
             if (realpath($dir) !== $primary) { continue; }

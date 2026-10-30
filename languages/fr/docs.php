@@ -12,6 +12,9 @@ return [
     'docs.settings.saved' => 'Paramètres de Docs enregistrés.',
     'docs.index.rebuilt'  => 'Index de la documentation reconstruit sur ce serveur.',
     'docs.reference.built' => 'Référence d\'API générée sur ce serveur.',
+    'docs.content.fetched'      => 'Contenu de la documentation récupéré depuis la source.',
+    'docs.content.no_source'    => 'Aucune source de contenu n\'est configurée.',
+    'docs.content.fetch_failed' => 'Impossible de récupérer le contenu de la documentation depuis la source.',
 
     // Landing chrome (localized so the docs home follows the language switch).
     'docs.landing.eyebrow' => 'Documentation',

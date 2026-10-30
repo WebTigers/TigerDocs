@@ -52,6 +52,32 @@ class Docs_Bootstrap extends Zend_Application_Module_Bootstrap
         });
     }
 
+    /**
+     * Keep this server's copy of the remote content current.
+     *
+     * The job is registered unconditionally but is a no-op when `docs.content_url` is unset, so an
+     * install with no remote source pays nothing for it. Every 15 minutes, because the point of
+     * publishing content to one path is that a correction reaches the fleet without a deploy — and
+     * an hour is long enough to be indistinguishable from "it didn't work". The fetch is one HTTP
+     * request when nothing has changed, so the frequency is close to free.
+     *
+     * Guarded: on a Core that predates the scheduler the content still resolves, it just needs the
+     * admin button or the deploy hook to refresh.
+     */
+    protected function _initDocsContentFetch()
+    {
+        if (!class_exists('Tiger_Schedule')) {
+            return;
+        }
+        Tiger_Schedule::register([
+            'key'           => 'docs.content_fetch',
+            'label'         => 'Fetch docs content',
+            'every'         => Tiger_Schedule::EVERY_15,
+            'run'           => 'Docs_Model_Remote::syncJob',
+            'email_on_fail' => false,
+        ]);
+    }
+
     /** Contribute the Docs page to the admin Settings tree (ACL-gated in the menu). */
     protected function _initAdminSettings()
     {
