@@ -6,6 +6,21 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-10-30
+
+### Fixed
+- **`requires.tiger` now states the version content modules actually need** — `>=1.46.0`, up from
+  `>=1.0`. 1.2.0 advertised module-supplied content, but the capability depends on
+  `Tiger_Module_Discovery::all()` carrying a manifest's `provides` block, which core did not do until
+  **1.46.0**. On any earlier core the feature failed *silently*: a content module installed, activated,
+  reported active, and contributed nothing — `isset($row['provides']['content'])` never matched, no
+  error was raised anywhere, and it read as a content problem rather than a version one.
+
+  Nothing about the module's own behaviour changes; this corrects a dependency declaration that was
+  understating what 1.2.0 needs. The advisory compat notice ("not tested for Tiger X.Y.Z") is a
+  notification rather than a gate, by design — but it is a far better outcome than an empty docs site
+  with no explanation.
+
 ## [1.2.0] — 2026-10-29
 
 ### Added
