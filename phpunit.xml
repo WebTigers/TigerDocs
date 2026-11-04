@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TigerDocs PHPUnit config. One suite:
+    unit — no DB, no network. The content engine's pure logic: slug/path sanitizers, the tiger:doc
+           front-matter parser, heading-id slugging, the nav-tree builder, the http(s)-only remote
+           source gate + manifest validation (the RCE-via-bucket guard), and the per-server
+           fingerprint build cache (file-backed, a temp dir).
+
+  Dependencies (Tiger_*/Zend_*/PHPUnit) resolve from a sibling tiger-core checkout's vendor/ (or
+  $TIGER_CORE_VENDOR) — this module has no runtime vendor of its own. Run with that checkout's phpunit:
+    ../tiger-core/vendor/bin/phpunit
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         bootstrap="tests/bootstrap.php"
+         cacheDirectory=".phpunit.cache"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         beStrictAboutOutputDuringTests="true"
+         beStrictAboutTestsThatDoNotTestAnything="true"
+         displayDetailsOnTestsThatTriggerWarnings="true"
+         displayDetailsOnTestsThatTriggerErrors="true">
+
+    <testsuites>
+        <testsuite name="unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">services</directory>
+            <directory suffix=".php">models</directory>
+            <directory suffix=".php">forms</directory>
+            <directory suffix=".php">controllers</directory>
+        </include>
+        <exclude>
+            <directory>migrations</directory>
+            <directory suffix=".php">languages</directory>
+        </exclude>
+    </source>
+
+    <php>
+        <env name="APPLICATION_ENV" value="testing"/>
+    </php>
+</phpunit>
