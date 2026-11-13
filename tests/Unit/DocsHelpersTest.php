@@ -152,6 +152,22 @@ final class DocsHelpersTest extends TestCase
         $this->assertSame('admin', $meta['visibility']);
     }
 
+    /**
+     * TIGER-497: modules ship the one-line attribute form. Read only as `key: value` lines, its
+     * visibility="admin" was dropped and admin-only help was served on the public docs site.
+     */
+    public function testMetaFromBodyReadsTheOneLineAttributeForm(): void
+    {
+        $body = "<!-- tiger:doc title=\"TigerMarketing\" area=\"modules\" visibility=\"admin\" -->\n# x";
+        $meta = $this->call($this->docs(), '_metaFromBody', [$body]);
+
+        $this->assertSame('admin', $meta['visibility'] ?? null, 'the attribute form keeps a page admin-only');
+        $this->assertSame('TigerMarketing', $meta['title'] ?? null);
+
+        $mixed = "<!-- tiger:doc\ntitle: Lines win\n-->";
+        $this->assertSame('Lines win', $this->call($this->docs(), '_metaFromBody', [$mixed])['title']);
+    }
+
     public function testMetaFromBodyEmptyWhenNoBlock(): void
     {
         $this->assertSame([], $this->call($this->docs(), '_metaFromBody', ["# Just a heading\n\nBody text."]));
