@@ -4,6 +4,14 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [1.3.2] — 2026-11-13
+
+### Fixed
+- The `tiger:doc` header's one-line attribute form (`<!-- tiger:doc title="X" visibility="admin" -->`) is now
+  read. Only `key: value` lines were parsed, so a module using the attribute form had its
+  `visibility="admin"` ignored and its admin-only help served on the public docs site (TIGER-497). A
+  `key: value` line still wins where both name the same key.
+
 ## [1.3.1] — 2026-11-13
 
 ### Fixed

@@ -1144,6 +1144,15 @@ class Docs_Model_Docs
                 $meta[strtolower($mm[1])] = trim($mm[2]);
             }
         }
+        // The one-line attribute form — `<!-- tiger:doc title="X" visibility="admin" -->` — is the same
+        // shape as the theme's tiger:page hint, and modules ship it. It MUST be honoured: read only as
+        // lines, its `visibility="admin"` was ignored and admin-only help was served on the public site
+        // (TIGER-497). A `key: value` line wins where both name the same key.
+        if (preg_match_all('/\b([a-z_]+)\s*=\s*"([^"]*)"/i', $m[1], $pairs, PREG_SET_ORDER)) {
+            foreach ($pairs as $pair) {
+                $meta += [strtolower($pair[1]) => trim($pair[2])];
+            }
+        }
         return $meta;
     }
 
