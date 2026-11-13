@@ -45,8 +45,7 @@ $pages = function ($node) use (&$pages) {
 
             <?php if (!$tree): ?>
             <div class="card"><div class="card-body text-body-secondary">
-                <i class="fa-regular fa-file-lines me-2"></i>No pages yet — drop a <code>.md</code> file into
-                <code>content/en/<?= $this->escape($collection) ?>/</code>.
+                <i class="fa-regular fa-file-lines me-2"></i><?= $this->translate('docs.landing.empty') ?>
             </div></div>
             <?php else: ?>
             <div class="row g-3">

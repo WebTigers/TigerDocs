@@ -20,6 +20,7 @@ return [
     'docs.landing.eyebrow' => 'दस्तावेज़ीकरण',
     'docs.landing.heading' => 'Tiger दस्तावेज़',
     'docs.landing.lead'    => 'आपके Tiger ऐप के लिए गाइड और संदर्भ।',
+    'docs.landing.empty'   => 'यहाँ अभी कोई पेज नहीं है।',
 
     'docs.onthispage'      => 'इस पेज पर',
     'docs.filter'          => 'पेज फ़िल्टर करें…',

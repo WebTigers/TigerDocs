@@ -868,7 +868,11 @@ class Docs_Model_Docs
             $trees[$slug] = $this->_nest($flat);
 
             $meta = $this->_indexMeta($desc);
-            $vis  = [$desc['defaultVis'] => true];   // a collection is at least its _index visibility
+            // A collection shows on a surface only when it has something there: a page of that
+            // visibility, or an _index that explicitly targets it. Without an _index, defaultVis is
+            // just the 'public' fallback — seeding it would list a collection of admin-only help on
+            // the public site as an empty section (TIGER-497: /docs/shop).
+            $vis  = $meta !== [] ? [$desc['defaultVis'] => true] : [];
             foreach ($flat as $id => $n) {
                 if ($n['header']) {
                     continue;
