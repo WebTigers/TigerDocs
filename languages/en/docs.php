@@ -21,6 +21,7 @@ return [
     'docs.landing.eyebrow' => 'Documentation',
     'docs.landing.heading' => 'Tiger Docs',
     'docs.landing.lead'    => 'Guides and reference for your Tiger app.',
+    'docs.landing.empty'   => 'There are no pages here yet.',
 
     'docs.onthispage'      => 'On this page',
     'docs.filter'          => 'Filter pages…',

@@ -4,6 +4,15 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [1.3.1] — 2026-11-13
+
+### Fixed
+- A collection is listed on a surface only when it has something there — a page of that visibility, or
+  an `_index` that targets it (TIGER-497). A module shipping only admin help and no `_index` (TigerShop,
+  TigerMarketing) was listed on the public docs site as an empty section.
+- The empty-collection card shows a translated, neutral line instead of an untranslated developer hint
+  ("drop a .md file into content/en/…"), which public visitors could see.
+
 ## [Unreleased]
 
 ## [1.3.0] — 2026-10-30

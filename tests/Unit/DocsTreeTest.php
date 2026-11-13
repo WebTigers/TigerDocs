@@ -158,4 +158,44 @@ final class DocsTreeTest extends TestCase
         $this->assertNotContains('bad', $keys, 'non-http(s) is refused');
         $this->assertNotContains('noti', $keys, 'an entry with no title is refused');
     }
+
+    // ── _build: a collection is listed on a surface only when it has something there ────────────
+
+    /**
+     * TIGER-497: a module shipping only admin help (no _index) was listed on the PUBLIC docs site as an
+     * empty section showing "No pages yet — drop a .md file…". The public surface must not list it; the
+     * admin surface still does, and a collection with a public _index or a public page still shows.
+     */
+    public function testBuildListsACollectionOnlyOnSurfacesItHasContentFor(): void
+    {
+        $root = sys_get_temp_dir() . '/tdocs-' . bin2hex(random_bytes(4));
+        $mk = function (string $dir, array $files) {
+            mkdir($dir, 0777, true);
+            foreach ($files as $name => $body) { file_put_contents("$dir/$name", $body); }
+        };
+        $mk("$root/shop", ['overview.md' => "<!-- tiger:doc\ntitle: Overview\nvisibility: admin\n-->\n# Shop help"]);
+        $mk("$root/pay",  ['overview.md' => "<!-- tiger:doc\ntitle: Overview\nvisibility: public\n-->\n# Pay"]);
+        $mk("$root/land", ['_index.md' => "<!-- tiger:doc\ntitle: Landing\n-->\n# Landing only"]);
+
+        $docs = $this->docs();
+        $prop = new \ReflectionProperty(Docs_Model_Docs::class, '_sources');
+        $was  = $prop->getValue();
+        $desc = fn($slug) => ['slug' => $slug, 'dirs' => ["$root/$slug"], 'defaultVis' => 'public', 'source' => 'module'];
+        $prop->setValue(null, ['en' => ['shop' => $desc('shop'), 'pay' => $desc('pay'), 'land' => $desc('land')]]);
+
+        try {
+            $built = $this->call($docs, '_build', ['en']);
+            $vis   = [];
+            foreach ($built['collections'] as $c) { $vis[$c['slug']] = array_keys(array_filter($c['vis'])); }
+
+            $this->assertNotContains('public', $vis['shop'], 'admin-only help is NOT listed on the public site');
+            $this->assertContains('admin', $vis['shop'], 'but it is on the admin help surface');
+            $this->assertContains('public', $vis['pay'], 'a collection with a public page is public');
+            $this->assertContains('public', $vis['land'], 'a collection whose _index targets public is public');
+        } finally {
+            $prop->setValue(null, $was);
+            foreach (['shop/overview.md', 'pay/overview.md', 'land/_index.md'] as $f) { @unlink("$root/$f"); }
+            foreach (['shop', 'pay', 'land', ''] as $d) { @rmdir(rtrim("$root/$d", '/')); }
+        }
+    }
 }
