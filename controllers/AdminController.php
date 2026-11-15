@@ -93,11 +93,24 @@ class Docs_AdminController extends Tiger_Controller_Admin_Action
         $this->view->tree        = $collection !== '' ? $docs->tree($locale, $collection, $base, $vis, '') : [];
         $this->view->title       = 'Help — Tiger Admin';
 
-        $doc = ($collection !== '') ? $docs->resolve($docSlug, $locale, '', $collection, $vis) : null;
+        $doc = ($collection !== '') ? $docs->resolve($docSlug, $locale, $this->_docOrgId(), $collection, $vis) : null;
         if ($docSlug !== '' && !$doc) {
             throw new Zend_Controller_Action_Exception('Doc not found', 404);
         }
         $this->view->doc     = $doc;
         $this->view->docSlug = $doc['slug'] ?? '';
+    }
+
+    /**
+     * The org whose DB doc overrides an admin read resolves under: the signed-in caller's CURRENT org
+     * (modules stay in the caller's org lane), with the model's cascade falling back to the shared ''
+     * rows (TIGER-511). '' when there is no identity.
+     *
+     * @return string the caller's org id, or ''
+     */
+    protected function _docOrgId()
+    {
+        $identity = Zend_Auth::getInstance()->getIdentity();
+        return ($identity && !empty($identity->org_id)) ? (string) $identity->org_id : '';
     }
 }

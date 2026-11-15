@@ -100,7 +100,7 @@ class Docs_IndexController extends Tiger_Controller_Action
         $this->view->tree        = $this->_docs->tree($locale, $collection, $base, $vis, Docs_Model_Docs::DEFAULT_COLLECTION);
         $this->view->docsBase    = $base;
 
-        $doc = $this->_docs->resolve($docSlug, $locale, '', $collection, $vis);
+        $doc = $this->_docs->resolve($docSlug, $locale, $this->_docOrgId(), $collection, $vis);
 
         if ($docSlug === '') {
             // Collection landing — its _index (may be null → the view shows a generic header).
@@ -120,6 +120,18 @@ class Docs_IndexController extends Tiger_Controller_Action
         $this->view->docSlug = $doc['slug'];
         $this->_helper->viewRenderer->setNoRender(true);
         $this->renderScript('index/view.phtml');
+    }
+
+    /**
+     * The org whose DB doc overrides the PUBLIC site serves: the SITE org (the tenant that owns the site
+     * being served — never the signed-in visitor's own org). The model's cascade still falls back to the
+     * shared '' rows, so global DB docs resolve when the site org has no override (TIGER-511).
+     *
+     * @return string the site org id ('' on a pre-install install)
+     */
+    protected function _docOrgId()
+    {
+        return (string) Tiger_Model_Org::siteOrgId();
     }
 
     /** Current request locale (set by the LocalePrefix plugin), defaulting to English. */
