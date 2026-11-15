@@ -9,6 +9,19 @@ jobs:
   phpunit:
     runs-on: ubuntu-latest
 
+    # The integration suite needs core's `page` table (the DB doc-override tier); it self-skips without a DB.
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: tiger_docs_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +45,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, sodium
+          extensions: pdo_mysql, mbstring, sodium
           coverage: none
 
       - name: Install tiger-core dev dependencies
@@ -41,4 +54,10 @@ jobs:
 
       - name: Run PHPUnit
         working-directory: TigerDocs
+        env:
+          TIGER_TEST_DB_NAME: tiger_docs_test
+          TIGER_TEST_DB_HOST: 127.0.0.1
+          TIGER_TEST_DB_PORT: 3306
+          TIGER_TEST_DB_USER: root
+          TIGER_TEST_DB_PASS: root
         run: ../tiger-core/vendor/bin/phpunit -c phpunit.xml

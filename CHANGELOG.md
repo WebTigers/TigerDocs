@@ -4,6 +4,15 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [1.3.3] — 2026-11-15
+
+### Fixed
+- The DB doc-override tier is served in the right org lane (TIGER-511). The public docs site now passes the
+  **site org** (`Tiger_Model_Org::siteOrgId()`) and the admin help surface the **signed-in caller's org**
+  to the resolver, instead of `''` — so per-org overrides are served explicitly, a signed-in visitor from
+  another org never sees their own org's overrides on someone else's site, and the shared `''` docs still
+  resolve as the fallback.
+
 ## [1.3.2] — 2026-11-13
 
 ### Fixed
