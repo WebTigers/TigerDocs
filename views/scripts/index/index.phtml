@@ -27,13 +27,14 @@ $pages = function ($node) use (&$pages) {
 <link rel="stylesheet" href="<?= $this->escape($this->asset($assets . '/vendor/highlight/docs.hljs.css')) ?>">
 <div class="docs-shell py-4" style="--docs-normal-max:1160px;">
     <div class="row g-4">
-        <aside class="col-lg-3 col-md-4 docs-aside docs-aside-left">
+        <aside class="col-lg-3 col-md-4 docs-aside docs-aside-left" aria-label="<?= $this->escape($this->translate('docs.title')) ?>">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
                 <?= $this->partial('_partials/nav.phtml', ['collections' => $collections, 'collection' => $collection, 'tree' => $tree, 'docSlug' => '', 'docsBase' => $base]) ?>
             </div>
         </aside>
 
-        <main class="col-lg-9 col-md-8 docs-main">
+        <?php /* A <div>, not <main>: the page layout already owns the one main landmark (WCAG / TIGER-516). */ ?>
+        <div class="col-lg-9 col-md-8 docs-main">
             <?php if ($doc && !empty($doc['html'])): ?>
             <article class="tiger-docs-body mb-4"><?= $doc['html'] ?></article>
             <?php else: ?>
@@ -70,7 +71,7 @@ $pages = function ($node) use (&$pages) {
                 <?php endforeach; ?>
             </div>
             <?php endif; ?>
-        </main>
+        </div>
     </div>
 </div>
 
