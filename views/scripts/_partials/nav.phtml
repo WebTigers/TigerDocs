@@ -84,7 +84,7 @@ $render = function (array $nodes) use (&$render, $active, $esc) {
            placeholder="<?= $esc($this->translate('docs.filter')) ?>" aria-label="<?= $esc($this->translate('docs.filter')) ?>">
 </div>
 
-<nav data-docs-nav>
+<nav data-docs-nav aria-label="<?= $this->escape($this->translate('docs.title')) ?>">
     <?php $render($tree); ?>
     <div class="nav-link py-1 px-2 small text-body-secondary d-none" data-docs-filter-empty><em>No pages match.</em></div>
 </nav>

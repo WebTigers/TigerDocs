@@ -55,8 +55,10 @@
 .docs-toc .nav-link {
     transition: color .15s ease;
 }
+/* The link colour, not --bs-primary: a skin's primary is tuned as a FILL and can fall below 4.5:1 as small
+ * text (Bengal's #c65312 is 4.2:1 on its cream ground); --bs-link-color is the skin's text-safe shade. */
 .docs-toc .nav-link.active {
-    color: var(--bs-primary) !important;
+    color: var(--bs-link-color) !important;
 }
 @media (prefers-reduced-motion: reduce) {
     .docs-toc-marker { transition: opacity .2s ease; }

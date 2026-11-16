@@ -4,6 +4,16 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [1.3.4] — 2026-11-16
+
+### Fixed — accessibility (TIGER-516)
+- The docs pages rendered a second `<main>` inside the layout's own, so screen readers saw two main
+  landmarks, one nested in the other. The docs column is now a `<div>`; the layout keeps the one `<main>`.
+- The side panels and the docs navigation are named landmarks ("Documentation", "On this page"), so they
+  are distinguishable when a screen reader lists landmarks.
+- The "On this page" active link used `--bs-primary`, which a skin tunes as a fill and can fall below
+  4.5:1 as small text (Bengal: 4.2:1). It now uses the skin's text-safe `--bs-link-color`.
+
 ## [1.3.3] — 2026-11-15
 
 ### Fixed

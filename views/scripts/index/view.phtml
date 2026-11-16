@@ -29,13 +29,14 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
 <link rel="stylesheet" href="<?= $this->escape($this->asset('/_modules/docs/vendor/highlight/docs.hljs.css')) ?>">
 <div class="docs-shell py-4">
     <div class="row g-4">
-        <aside class="col-lg-3 col-md-4 docs-aside docs-aside-left">
+        <aside class="col-lg-3 col-md-4 docs-aside docs-aside-left" aria-label="<?= $this->escape($this->translate('docs.title')) ?>">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
                 <?= $this->partial('_partials/nav.phtml', ['collections' => $this->collections, 'collection' => $this->collection, 'tree' => $this->tree, 'docSlug' => $this->docSlug, 'docsBase' => $this->docsBase]) ?>
             </div>
         </aside>
 
-        <main class="<?= $mainCol ?> col-md-8 docs-main">
+        <?php /* A <div>, not <main>: the page layout already owns the one main landmark (WCAG / TIGER-516). */ ?>
+        <div class="<?= $mainCol ?> col-md-8 docs-main">
             <article class="tiger-docs-body">
                 <?= $doc['html'] ?>
             </article>
@@ -60,10 +61,10 @@ $next = ($idx !== null && $idx < count($flat) - 1)  ? $flat[$idx + 1] : null;
                 </div>
             </nav>
             <?php endif; ?>
-        </main>
+        </div>
 
         <?php if ($headings): ?>
-        <aside class="col-lg-2 d-none d-lg-block docs-aside docs-aside-right">
+        <aside class="col-lg-2 d-none d-lg-block docs-aside docs-aside-right" aria-label="<?= $this->escape($this->translate('docs.onthispage')) ?>">
             <div class="sticky-top pt-2" style="top:4.5rem;z-index:1;">
                 <div class="small text-uppercase text-body-secondary mb-2 fw-semibold" style="letter-spacing:.06em;"><?= $this->translate('docs.onthispage') ?></div>
                 <nav class="docs-toc nav flex-column border-start ps-3 position-relative" id="docsToc">
