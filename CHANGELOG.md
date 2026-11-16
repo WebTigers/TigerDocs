@@ -4,6 +4,15 @@ All notable changes to **Tiger Docs** (`webtigers/docs`). Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses [SemVer](https://semver.org/)
 — while `0.x`, the public API (`@api`) may still shift between minor versions.
 
+## [1.4.0] — 2026-11-16
+
+### Added — typed MCP tools
+- Every `/api` operation declares its input (`docs/search/query` takes `q` and `scope`; `docs/settings/save`
+  takes the settings form; the rebuild/fetch/reference actions take nothing), so an MCP client sees typed tool
+  arguments instead of a blank object. TigerDocs is in core's default MCP scope set, and its five tools were the
+  only untyped ones a scoped token listed. A unit test keeps every operation declared (needs tiger-core 1.62.0
+  for `Tiger_OpenApi_Generator::untyped()`).
+
 ## [1.3.4] — 2026-11-16
 
 ### Fixed — accessibility (TIGER-516)

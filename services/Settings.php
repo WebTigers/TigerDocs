@@ -19,7 +19,8 @@ class Docs_Service_Settings extends Tiger_Service_Service
      * Validate the settings form and persist the public route override to config.
      *
      * @param  array $params the submitted Docs_Form_Settings values
-     * @return void          responds via _success/_formErrors/_error
+     * @apiRequest Docs_Form_Settings
+     * @return void         responds via _success/_formErrors/_error
      */
     public function save(array $params): void
     {
@@ -58,6 +59,7 @@ class Docs_Service_Settings extends Tiger_Service_Service
      * (the others self-heal on their own next content change), so warm each server at deploy.
      *
      * @param  array $params the request payload (unused)
+     * @apiRequest none
      * @return void          responds via _success/_error with the indexed page count
      */
     public function rebuild(array $params): void
@@ -82,6 +84,7 @@ class Docs_Service_Settings extends Tiger_Service_Service
      * own tick, so this button is for "I just published, show me now" rather than a fleet action.
      *
      * @param  array $params the request payload (unused)
+     * @apiRequest none
      * @return void          responds via _success/_error with the file + change counts
      */
     public function fetchContent(array $params): void
@@ -118,6 +121,7 @@ class Docs_Service_Settings extends Tiger_Service_Service
      * an admin button. Per-server, like the index rebuild; generated docs are never committed.
      *
      * @param  array $params the request payload (unused)
+     * @apiRequest none
      * @return void          responds via _success/_error with the page + per-target counts
      */
     public function buildReference(array $params): void
