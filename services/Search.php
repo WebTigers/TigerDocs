@@ -18,7 +18,9 @@ class Docs_Service_Search extends Tiger_Service_Service
      * Search the docs and return ranked, surface-correct hits over /api.
      *
      * @param  array $params the request payload (`q`, optional `scope` = public|admin)
-     * @return void          responds via _success/_error (results carry a ready-to-use `url`)
+     * @apiParam string q The search text; empty returns no results.
+     * @apiParam string(public|admin) scope Which docs to search; admin help needs an admin role. Default public.
+     * @return void         responds via _success/_error (results carry a ready-to-use `url`)
      */
     public function query(array $params): void
     {
