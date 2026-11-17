@@ -57,8 +57,10 @@ final class DocOrgOverrideTest extends IntegrationTestCase
 
     protected function tearDown(): void
     {
-        $this->siteProp->setValue(null, $this->siteWas);
-        $this->sourcesProp->setValue(null, $this->sourcesWas);
+        // parent::setUp() skips the test when no test DB is configured — before these are captured — so
+        // restore only what setUp actually swapped (TIGER-529: it errored instead of skipping cleanly).
+        if (isset($this->siteProp))    { $this->siteProp->setValue(null, $this->siteWas); }
+        if (isset($this->sourcesProp)) { $this->sourcesProp->setValue(null, $this->sourcesWas); }
         parent::tearDown();
     }
 
